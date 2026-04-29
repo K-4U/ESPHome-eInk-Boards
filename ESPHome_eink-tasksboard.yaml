@@ -1,14 +1,11 @@
-# Inspired by https://github.com/Madelena/esphome-weatherman-dashboard
-# And https://blog.wijman.net/e-ink-weather-frame-with-esphome-and-home-assistant/
-# With a lot of my own additions, fixes, edits. My github: https://github.com/trip5
 
 substitutions:
   name: eink-tasksboard
   friendly_name: eInk-TasksBoard
-  project_name: "Trip5.eInk-TasksBoard"
-  comment: "eInk-TasksBoard from Trip5"
-  project_version: "2026.02.22"
-  time_zone: "Asia/Seoul" # Check https://github.com/trip5/timezones.json/blob/master/timezones.md
+  project_name: "K-4U.eInk-TasksBoard"
+  comment: "eInk-TasksBoard from K-4U"
+  project_version: "2026.04.29"
+  time_zone: "Europe/Amsterdam" # Check https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
   adc_pin: GPIO34
   sleep_time: 600min # this is the default but is overridden
 
@@ -19,17 +16,17 @@ substitutions:
   ha_wake_times: sensor.eink_tasksboard_wake_times
 
 # A physical switch to disable deep sleep (optional, if no physical switch is attached then no problem)
-  deep_sleep_disable_pin: GPIO21
+  deep_sleep_disable_pin: GPIO2
 
 # Waveshare eInk Board:
   status_led_pin: GPIO2
-  mosi_pin: GPIO14
-  clk_pin: GPIO13
-  cs_pin: GPIO15
-  dc_pin: GPIO27
-  reset_pin: GPIO26
-  busy_pin: GPIO25
-  busy_inverted: "true" #needed on most newer boards: check ESPHome or component notes
+  mosi_pin: GPIO23
+  clk_pin: GPIO18
+  cs_pin: GPIO22
+  dc_pin: GPIO21
+  reset_pin: GPIO17
+  busy_pin: GPIO16
+  busy_inverted: "True" #needed on most newer boards: check ESPHome or component notes
 
   # Everything here is meant for an 7.5 inch tricolor display, which is (as of 2024.12.0) now directly supported by ESPHome (thanks, JonasB2497!)
   # See here for full list of directly-supported displays: https://esphome.io/components/display/waveshare_epaper.html
@@ -61,51 +58,54 @@ esphome:
               - script.execute: get_data_then_refresh_screen
 
 esp32:
-  board: esp32dev
+  board: wemos_d1_mini32
+  #board: esp32dev
   framework:
     type: arduino
 
 preferences:
   flash_write_interval: 5s # default is 1min but seems sometimes id(recorded_display_refresh) doesn't get saved unless this is short
 
-ota:
-  - platform: esphome
-    password: !secret ota_password
-
-wifi:
-  networks:
-    - ssid: !secret wifi_ssid
-      password: !secret wifi_password
-  fast_connect: true
-  ap:
-    ssid: ${name}
-    password: !secret ap_password
+json:
 
 web_server:
   port: 80
-  # include_internal: true # probably not necessary, as it will expose more than needed to the Web UI
+  include_internal: True
+  version: 3
 
-captive_portal:
-
-# Enable logging (and stops the LED from spamming the log) - it would also be OK to change the main level to ERROR
+# Enable logging
 logger:
   level: DEBUG
   logs:
-    light: ERROR
-    script: ERROR
-    sensor: ERROR
+    display: DEBUG
+    waveshare_epaper: DEBUG
 
 # Enable Home Assistant API
 api:
-  # delete next 2 lines if not using HA API encryption
   encryption:
-    key: !secret encryption_key
+    key: !secret api_key
+
+ota:
+  - platform: web_server
+  - platform: esphome
+    password: !secret ota_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: False
+  output_power: 8.5dB
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Todo-List Fallback Hotspot"
+    password: !secret ap_password
 
 button:
   - platform: restart
     name: "${friendly_name} Restart"
     id: "Restart"
-    internal: true
+    internal: True
   - platform: template
     name: "${friendly_name} Refresh Screen"
     entity_category: config
@@ -159,6 +159,15 @@ globals:
     type: int
     restore_value: yes
     initial_value: '0'
+  - id: today
+    type: std::vector<String>  # Define a global variable as a vector of strings
+    initial_value: "std::vector<String>()"
+  - id: upcoming
+    type: std::vector<String>  # Define a global variable as a vector of strings
+    initial_value: "std::vector<String>()"
+  - id: upcoming_dates
+    type: std::vector<String>  # Define a global variable as a vector of strings
+    initial_value: "std::vector<String>()"
 
 script:
   - id: get_data_then_refresh_screen
@@ -254,7 +263,7 @@ script:
       - component.update: display_last_update
       - component.update: wifisignal
       - component.update: battery_adc
-      - delay: 60s
+      - delay: 10s
       - script.execute: update_diagnostic_sensors
 
 deep_sleep:
@@ -283,13 +292,10 @@ binary_sensor:
       } else {
         return false;
       }
-  - platform: gpio # This sensor is for physical switch to enable deep sleep
-    pin: 
-      number: ${deep_sleep_disable_pin}
-      inverted: true
-      mode:
-        input: true
-        pullup: true
+  - platform: template
+    lambda: |-
+      return true; 
+    # This sensor is for physical switch to enable deep sleep
     name: "${friendly_name} Disable Deep Sleep Switch"
     id: deep_sleep_disable_switch
 # The following are boolean helpers in Home Assistant
@@ -311,34 +317,52 @@ font:
   # The glyphs must be present or you'll see boxes/blank spaces (no problem unless you edit the Display section below) - don't forget to include a space!
   # How to get an easy glyphs list? Copy the code from here: https://www.geeksforgeeks.org/cpp-program-to-remove-duplicates-from-a-given-string/
   # ...to here: https://www.onlinegdb.com/online_c++_compiler
-  - file: 'fonts/Gotham-Rounded-Bold.ttf'
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
     id: font_title
     size: 52
     glyphs: |-
       T LOADING
-  - file: 'fonts/Gotham-Rounded-Bold.ttf'
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
     id: font_small_title
     size: 30
     glyphs: |-
       UPCOMING
-  - file: 'fonts/Gotham-Rounded-Book.ttf'
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 400
     id: font_refresh_stamp
     size: 20
     glyphs: |-
-      Refrshd at1234567890:AMPSunoTWFi
+      JanFebMrApyulgSOctNovDTWdhiRfs :1234567890
   # The fonts below this point will be used to display tasks - if you see black squares on your tasksboard, you forgot to include it on the glyphs list!
   # Easy to forget characters include currency marks. The glyphs under font_today_list and font_upcoming_item should match the filter in your Home Assistant YAML!
-  - file: 'fonts/Gotham-Rounded-Bold.ttf'
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
     id: font_today_list
     size: 26
     glyphs: |-
       ! "#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz°
-  - file: 'fonts/Gotham-Rounded-Medium.ttf'
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 500
     id: font_upcoming_date
     size: 20
     glyphs: |-
       ! "#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz°
-  - file: 'fonts/Gotham-Rounded-Bold.ttf'
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
     id: font_upcoming_item
     size: 22
     glyphs: |-
@@ -348,14 +372,24 @@ font:
   # Get it here: https://github.com/Templarian/MaterialDesign-Webfont/
 
   # Encoding glyphs from here: https://community.home-assistant.io/t/display-materialdesign-icons-on-esphome-attached-to-screen/199790/16
-  - file: 'fonts/materialdesignicons-webfont.ttf'
+  - file: 
+      type: gfonts
+      family: 'Material+Symbols+Outlined'
     id: font_battery_glyphs
     size: 22
     glyphs: &mdi-battery-glyphs
-      - "\U000F10CD" # mdi-battery-warning
-      - "\U000F12A3" # mdi-battery-high
-      - "\U000F12A2" # mdi-battery-med
-      - "\U000F12A1" # mdi-battery-low
+      - "\U0000E19C" # mdi-battery-warning
+      - "\U0000E1A4" # mdi-battery-high
+      - "\U0000EBDD" # mdi-battery-med
+      - "\U0000F155" # mdi-battery-low
+      - "\U0000e87d" # Heart
+      - "\U0000e8f9" # Suitcase
+      - "\U0000e531" # Jifeline
+      - "\U0000e7fd" # Person
+      - "\U0000f036" # Moon
+      - "\U0000e5d5" # Refresh
+      - "\U0000ebcc" # Calendar
+      - "\U0000e7e9" #Birthday cake
 
 sensor:  
   # Create sensors for monitoring the board remotely.
@@ -381,6 +415,12 @@ sensor:
     update_interval: never
     unit_of_measurement: "dBm"
     entity_category: "diagnostic"
+    filters:
+      #use moving median to smooth spikes
+      - median:
+          window_size: 5
+          send_every: 5
+          send_first_at: 5
   - platform: adc
     # get an unfiltered reading from the ADC pin
     name: "${friendly_name} Battery Unfiltered"
@@ -431,7 +471,7 @@ sensor:
 text_sensor:
   - platform: version
     name: "${friendly_name} ESPHome Version"
-    hide_timestamp: true
+    hide_timestamp: True
     entity_category: diagnostic
   - platform: wifi_info
     ip_address:
@@ -451,341 +491,39 @@ text_sensor:
   # Call text sensors from Home Assistant
   - platform: homeassistant
     entity_id: '${ha_tasks_data}'
-    attribute: today_0
-    id: today_0
+    attribute: today
+    id: temp_today
     on_value:
       then:
          - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: today_1
-    id: today_1
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: today_2
-    id: today_2
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: today_3
-    id: today_3
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: today_4
-    id: today_4
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: today_5
-    id: today_5
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: today_6
-    id: today_6
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: today_7
-    id: today_7
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: today_8
-    id: today_8
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: today_9
-    id: today_9
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
+         - lambda: |-
+            id(today).clear();
+            std::string body = id(temp_today).state;
+
+            DynamicJsonDocument doc(2048);
+            deserializeJson(doc, body);
+            for(JsonVariant elem : doc.as<JsonArray>()){
+              id(today).push_back(String(elem.as<String>().c_str()));
+            }
 
   - platform: homeassistant
     entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_0
-    id: upcoming_date_0
-    on_value:
+    attribute: upcoming
+    id: temp_upcoming
+    on_value: 
       then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_0
-    id: upcoming_item_0
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_1
-    id: upcoming_date_1
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_1
-    id: upcoming_item_1
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_2
-    id: upcoming_date_2
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_2
-    id: upcoming_item_2
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_3
-    id: upcoming_date_3
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_3
-    id: upcoming_item_3
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_4
-    id: upcoming_date_4
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_4
-    id: upcoming_item_4
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_5
-    id: upcoming_date_5
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_5
-    id: upcoming_item_5
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_6
-    id: upcoming_date_6
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_6
-    id: upcoming_item_6
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_7
-    id: upcoming_date_7
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_7
-    id: upcoming_item_7
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_8
-    id: upcoming_date_8
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_8
-    id: upcoming_item_8
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_9
-    id: upcoming_date_9
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_9
-    id: upcoming_item_9
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_10
-    id: upcoming_date_10
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_10
-    id: upcoming_item_10
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_11
-    id: upcoming_date_11
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_11
-    id: upcoming_item_11
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_12
-    id: upcoming_date_12
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_12
-    id: upcoming_item_12
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_13
-    id: upcoming_date_13
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_13
-    id: upcoming_item_13
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_14
-    id: upcoming_date_14
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_14
-    id: upcoming_item_14
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_15
-    id: upcoming_date_15
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_15
-    id: upcoming_item_15
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_16
-    id: upcoming_date_16
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_16
-    id: upcoming_item_16
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_17
-    id: upcoming_date_17
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_17
-    id: upcoming_item_17
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_date_18
-    id: upcoming_date_18
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_tasks_data}'
-    attribute: upcoming_item_18
-    id: upcoming_item_18
-    on_value:
-      then:
-         - lambda: 'id(data_updated) = true;'
+        - lambda: 'id(data_updated) = true;'
+        - lambda: |-
+            id(upcoming).clear();
+            id(upcoming_dates).clear();
+            std::string body = id(temp_upcoming).state;
+
+            DynamicJsonDocument doc(2048);
+            deserializeJson(doc, body);
+            for(JsonObject elem : doc.as<JsonArray>()){
+              id(upcoming).push_back(String(elem["event"].as<String>().c_str()));
+              id(upcoming_dates).push_back(String(elem["date"].as<String>().c_str()));
+            }
 
 # Now render everything on the ePaper screen.
 display:
@@ -793,7 +531,6 @@ display:
     id: eink_display
     cs_pin:
       number: ${cs_pin}
-      ignore_strapping_warning: true
     dc_pin: ${dc_pin}
     busy_pin:
       number: ${busy_pin}
@@ -820,249 +557,107 @@ display:
     
       // Because this list will dynamically space, we should define the starting column and row and row spacing (in pixels)
       // every time an item exists, spacing is added accordingly... center is hard-coded as 240 (assuming 480 width)
-      int col = 27;
-      int row = 68;
+      int col = 15;
+      int row = 0;
       // make the spacing the font size + a bit more
       int spacing_title = 64;
       int spacing_today = 30;
       int spacing_small_title = 36;
       int spacing_upcoming_date = 22;
       int spacing_upcoming_item = 28;
-      int lastrow = 715 - spacing_upcoming_item - spacing_upcoming_date;
+      int line_spacing = 40;
+      int lastrow = 815 - spacing_upcoming_item - spacing_upcoming_date;
       int whiteout_row = 0; // this is used to make the left and right sides evenly blank, so the text doesn't look like its running under the frame
+      int headerHeight = 27;
+
+      //Header
+      it.filled_rectangle(0, 0, it.get_width(), headerHeight, color_blk);
+
+      // Refresh Timestamp with time and day
+      // from https://community.home-assistant.io/t/esphome-show-time/348903
+      it.printf(10, 2, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000e5d5");
+      it.strftime(35, 4, id(font_refresh_stamp), COLOR_OFF, TextAlign::TOP_LEFT, "%H:%M %a", id(homeassistant_time).now());
+
+      //But also the current date.
+      it.printf(180, 2, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000ebcc");
+      it.strftime(180+25, 4, id(font_refresh_stamp), COLOR_OFF, TextAlign::TOP_LEFT, "%b %d %Y", id(homeassistant_time).now());
+
+      //Battery icon
+      std::map<std::string, std::string> battery_icon_map
+      {
+        {"batteryhigh", "\U0000E1A4"},
+        {"batterymed", "\U0000EBDD"},
+        {"batterylow", "\U0000F155"},
+        {"batterywarn", "\U0000E19C"}
+      };
+      int batt_x = 460; 
+      int batt_y = 2;
+      float batt_v = float(id(battery_adc).state);
+      if (0 <= batt_v && batt_v < 3.4) { it.printf(batt_x, batt_y, id(font_battery_glyphs), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterywarn"].c_str()); }
+      if (3.4 <= batt_v && batt_v < 3.6) { it.printf(batt_x, batt_y, id(font_battery_glyphs), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterylow"].c_str()); }
+      if (3.6 <= batt_v && batt_v < 3.8) { it.printf(batt_x, batt_y, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterymed"].c_str()); }
+      if (3.8 <= batt_v && batt_v < 4.3) { it.printf(batt_x, batt_y, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_CENTER, "%s", battery_icon_map["batteryhigh"].c_str()); }
+      // battery icon not displayed if voltage is above 4.3V (but ADC must still be connected to 5V pin)
+
+      row = row + headerHeight;
 
       // TODAY'S TASKS
       it.printf(240, row, id(font_title), color_red, TextAlign::TOP_CENTER, "TO DO");
       row = row + spacing_title;
+      
+      it.horizontal_line(line_spacing, row-10, 480-(line_spacing*2), color_red);
       whiteout_row = row;
 
-      // The following code is not elegant. I realize it would have been more efficient to have a loop run on arrays and use delimiters.
-      // But the possibility that the delimiter is actually in the task field was too great so I stuck with this one-by-one method
-
-      if (! (id(today_0).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_0).state.c_str());
-        row = row + spacing_today;
-      } else {
+      std::map<std::string, std::string> category_map
+        {
+          {"F:", "\U0000E87D"},
+          {"W:", "\U0000E8F9"},
+          {"P:", "\U0000E7FD"},
+          {"J:", "\U0000E531"},
+          {"M:", "\U0000f036"},
+          {"B:", "\U0000e7e9"}
+        };
+      if(id(today).size() > 0){
+        for(size_t i = 0; i < id(today).size();i++){
+          std::string full_text = std::string(id(today)[i].c_str()); // Get the full string
+          std::string category = full_text.substr(0, 2); // Extract the first two characters
+          std::string event = full_text.substr(3); // Get the rest of the string
+          it.printf(col, row+2, id(font_battery_glyphs), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
+          it.printf(col+25, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
+          row = row + spacing_today;
+        }
+      }else{
         it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", "Nothing today!");
         row = row + spacing_today;
       }
-      if (! (id(today_1).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_1).state.c_str());
-        row = row + spacing_today;
-      }
-      if (! (id(today_2).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_2).state.c_str());
-        row = row + spacing_today;
-      }
-      if (! (id(today_3).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_3).state.c_str());
-        row = row + spacing_today;
-      }
-      if (! (id(today_4).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_4).state.c_str());
-        row = row + spacing_today;
-      }
-      if (! (id(today_5).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_5).state.c_str());
-        row = row + spacing_today;
-      }
-      if (! (id(today_6).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_6).state.c_str());
-        row = row + spacing_today;
-      }
-      if (! (id(today_7).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_7).state.c_str());
-        row = row + spacing_today;
-      }
-      if (! (id(today_8).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_8).state.c_str());
-        row = row + spacing_today;
-      }
-      if (! (id(today_9).state.empty())) {
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", id(today_9).state.c_str());
-        row = row + spacing_today;
-      }
-      
+
       it.filled_rectangle((it.get_width()-col), whiteout_row, (it.get_width()-col), row, COLOR_OFF);
 
       // UPCOMING TASKS
       row = row - spacing_today + (spacing_small_title);
       it.printf(240, row, id(font_small_title), color_red, TextAlign::TOP_CENTER, "UPCOMING");
       row = row + spacing_small_title;
+      it.horizontal_line(line_spacing, row, 480-(line_spacing*2), color_red);
+      row = row + 5;
       whiteout_row = row;
 
-      if ((row <= lastrow) && (! (id(upcoming_item_0).state.empty()))) {
-        it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_0).state + ":").c_str());
-        row = row + spacing_upcoming_date;
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_0).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_1).state.empty()))) {
-        if (id(upcoming_date_1).state.compare(id(upcoming_date_0).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_1).state + ":").c_str());
-          row = row + spacing_upcoming_date;
+      for(size_t i = 0; i< id(upcoming).size();i++){
+        if ((row <= lastrow) && (! (id(upcoming)[i].isEmpty()))) {
+          if (i == 0 || id(upcoming_dates)[i].compareTo(id(upcoming_dates)[i-1]) != 0) {
+            it.printf(col, row, id(font_upcoming_date), color_red, TextAlign::TOP_LEFT, "%s", (id(upcoming_dates)[i] + ":").c_str());
+            row = row + spacing_upcoming_date;
+          }
+          std::string full_text = std::string(id(upcoming)[i].c_str()); // Get the full string
+          std::string category = full_text.substr(0, 2); // Extract the first two characters
+          std::string event = full_text.substr(3); // Get the rest of the string
+          
+          it.printf(col+5, row, id(font_battery_glyphs), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
+          it.printf(col+30, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
+          row = row + spacing_upcoming_item;
         }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_1).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_2).state.empty()))) {
-        if (id(upcoming_date_2).state.compare(id(upcoming_date_1).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_2).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_2).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_3).state.empty()))) {
-        if (id(upcoming_date_3).state.compare(id(upcoming_date_2).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_3).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_3).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_4).state.empty()))) {
-        if (id(upcoming_date_4).state.compare(id(upcoming_date_3).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_4).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_4).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_5).state.empty()))) {
-        if (id(upcoming_date_5).state.compare(id(upcoming_date_4).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_5).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_5).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_6).state.empty()))) {
-        if (id(upcoming_date_6).state.compare(id(upcoming_date_5).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_6).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_6).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_7).state.empty()))) {
-        if (id(upcoming_date_7).state.compare(id(upcoming_date_6).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_7).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_7).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_8).state.empty()))) {
-        if (id(upcoming_date_8).state.compare(id(upcoming_date_7).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_8).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_8).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_9).state.empty()))) {
-        if (id(upcoming_date_9).state.compare(id(upcoming_date_8).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_9).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_9).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_10).state.empty()))) {
-        if (id(upcoming_date_10).state.compare(id(upcoming_date_9).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_10).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_10).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_11).state.empty()))) {
-        if (id(upcoming_date_11).state.compare(id(upcoming_date_10).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_11).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_11).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_12).state.empty()))) {
-        if (id(upcoming_date_12).state.compare(id(upcoming_date_11).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_12).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_12).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_13).state.empty()))) {
-        if (id(upcoming_date_13).state.compare(id(upcoming_date_12).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_13).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_13).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_14).state.empty()))) {
-        if (id(upcoming_date_14).state.compare(id(upcoming_date_13).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_14).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_14).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_15).state.empty()))) {
-        if (id(upcoming_date_15).state.compare(id(upcoming_date_14).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_15).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_15).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_16).state.empty()))) {
-        if (id(upcoming_date_16).state.compare(id(upcoming_date_15).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_16).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_16).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_17).state.empty()))) {
-        if (id(upcoming_date_17).state.compare(id(upcoming_date_16).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_17).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_17).state).c_str());
-        row = row + spacing_upcoming_item;
-      }
-      if ((row <= lastrow) && (! (id(upcoming_item_18).state.empty()))) {
-        if (id(upcoming_date_18).state.compare(id(upcoming_date_17).state) != 0) {
-          it.printf(col, row, id(font_upcoming_date), color_blk, TextAlign::TOP_LEFT, "%s", (id(upcoming_date_18).state + ":").c_str());
-          row = row + spacing_upcoming_date;
-        }
-        it.printf(col, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", ("  " + id(upcoming_item_18).state).c_str());
-        row = row + spacing_upcoming_item;
       }
 
       it.filled_rectangle((it.get_width()-col), whiteout_row, (it.get_width()-col), row, COLOR_OFF);
 
-      // Refresh Timestamp with time and day
-      // from https://community.home-assistant.io/t/esphome-show-time/348903
-      char str[17];
-      time_t currTime = id(homeassistant_time).now().timestamp;
-      strftime(str, sizeof(str), "%l:%M%p %a", localtime(&currTime));
-      it.printf(240, 715, id(font_refresh_stamp), color_blk, TextAlign::TOP_CENTER, "Refreshed at %s", str);
-       // Battery Icon by Trip5 (placement at bottom right can be tricky)
-      std::map<std::string, std::string> battery_icon_map
-      {
-        {"batteryhigh", "\U000F12A3"},
-        {"batterymed", "\U000F12A2"},
-        {"batterylow", "\U000F12A1"},
-        {"batterywarn", "\U000F10CD"}
-      };
-      int batt_x = 440; 
-      int batt_y = 712;
-      float batt_v = float(id(battery_adc).state);
-      if (0 <= batt_v && batt_v < 3.4) { it.printf(batt_x, batt_y, id(font_battery_glyphs), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterywarn"].c_str()); }
-      if (3.4 <= batt_v && batt_v < 3.6) { it.printf(batt_x, batt_y, id(font_battery_glyphs), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterylow"].c_str()); }
-      if (3.6 <= batt_v && batt_v < 3.8) { it.printf(batt_x, batt_y, id(font_battery_glyphs), color_blk, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterymed"].c_str()); }
-      if (3.8 <= batt_v && batt_v < 4.3) { it.printf(batt_x, batt_y, id(font_battery_glyphs), color_blk, TextAlign::TOP_CENTER, "%s", battery_icon_map["batteryhigh"].c_str()); }
-      // battery icon not displayed if voltage is above 4.3V (but ADC must still be connected to 5V pin)
+
+
