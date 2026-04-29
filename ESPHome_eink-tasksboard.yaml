@@ -39,6 +39,9 @@ esphome:
   project:
     name: "${project_name}"
     version: "${project_version}"
+  includes:
+    - includes/calendar_utilities.h
+    - includes/text_utilities.h
   on_boot:
       priority: -100.0
       then:
@@ -140,6 +143,7 @@ color:
     blue: 0%
     white: 0%
 
+
 # Pins for Waveshare ePaper ESP Board
 spi:
   clk_pin: ${clk_pin}
@@ -162,10 +166,16 @@ globals:
   - id: today
     type: std::vector<String>  # Define a global variable as a vector of strings
     initial_value: "std::vector<String>()"
+  - id: today_times
+    type: std::vector<String>  # Define a global variable as a vector of strings
+    initial_value: "std::vector<String>()"
   - id: upcoming
     type: std::vector<String>  # Define a global variable as a vector of strings
     initial_value: "std::vector<String>()"
   - id: upcoming_dates
+    type: std::vector<String>  # Define a global variable as a vector of strings
+    initial_value: "std::vector<String>()"
+  - id: upcoming_times
     type: std::vector<String>  # Define a global variable as a vector of strings
     initial_value: "std::vector<String>()"
 
@@ -322,17 +332,9 @@ font:
       family: Roboto
       weight: 700
     id: font_title
-    size: 52
-    glyphs: |-
-      T LOADING
-  - file:
-      type: gfonts
-      family: Roboto
-      weight: 700
-    id: font_small_title
     size: 30
     glyphs: |-
-      UPCOMING
+      UPCOMINGTDAY
   - file:
       type: gfonts
       family: Roboto
@@ -348,7 +350,7 @@ font:
       family: Roboto
       weight: 700
     id: font_today_list
-    size: 26
+    size: 24
     glyphs: |-
       ! "#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz°
   - file:
@@ -364,9 +366,17 @@ font:
       family: Roboto
       weight: 700
     id: font_upcoming_item
-    size: 22
+    size: 20
     glyphs: |-
       ! "#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz°
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 500
+    id: font_time
+    size: 18
+    glyphs: |-
+      0123456789:
 
   # Include Material Design Icons font (for battery icons) (by Austin Andrews / Templarian)
   # Get it here: https://github.com/Templarian/MaterialDesign-Webfont/
@@ -498,12 +508,14 @@ text_sensor:
          - lambda: 'id(data_updated) = true;'
          - lambda: |-
             id(today).clear();
+            id(today_times).clear();
             std::string body = id(temp_today).state;
 
             DynamicJsonDocument doc(2048);
             deserializeJson(doc, body);
             for(JsonVariant elem : doc.as<JsonArray>()){
-              id(today).push_back(String(elem.as<String>().c_str()));
+              id(today).push_back(String(elem["event"].as<String>().c_str()));
+              id(today_times).push_back(String(elem["start_time"].as<String>().c_str()));
             }
 
   - platform: homeassistant
@@ -516,6 +528,7 @@ text_sensor:
         - lambda: |-
             id(upcoming).clear();
             id(upcoming_dates).clear();
+            id(upcoming_times).clear();
             std::string body = id(temp_upcoming).state;
 
             DynamicJsonDocument doc(2048);
@@ -523,6 +536,7 @@ text_sensor:
             for(JsonObject elem : doc.as<JsonArray>()){
               id(upcoming).push_back(String(elem["event"].as<String>().c_str()));
               id(upcoming_dates).push_back(String(elem["date"].as<String>().c_str()));
+              id(upcoming_times).push_back(String(elem["start_time"].as<String>().c_str()));
             }
 
 # Now render everything on the ePaper screen.
@@ -539,7 +553,7 @@ display:
     model: ${model}
     update_interval: never
     setup_priority: 1000
-    rotation: 90°
+    #rotation: 90°
     lambda: |-
       // Left from Madelena's code... perhaps if you want a black or colored background first (useful for fast-refresh screens?) to fill the background.
       // it.fill(color_bg);
@@ -555,32 +569,33 @@ display:
       // it.rectangle(70, 70, 340, 660);
       // it.rectangle(80, 80, 320, 640);
     
-      // Because this list will dynamically space, we should define the starting column and row and row spacing (in pixels)
-      // every time an item exists, spacing is added accordingly... center is hard-coded as 240 (assuming 480 width)
       int col = 15;
       int row = 0;
       // make the spacing the font size + a bit more
-      int spacing_title = 64;
+      int spacing_title = 36;
       int spacing_today = 30;
-      int spacing_small_title = 36;
       int spacing_upcoming_date = 22;
       int spacing_upcoming_item = 28;
       int line_spacing = 40;
-      int lastrow = 815 - spacing_upcoming_item - spacing_upcoming_date;
+      int lastrow = it.get_height() - spacing_upcoming_item - spacing_upcoming_date;
       int whiteout_row = 0; // this is used to make the left and right sides evenly blank, so the text doesn't look like its running under the frame
-      int headerHeight = 27;
+      int headerHeight = 28;
+      int width = it.get_width();
+      int center = it.get_width() / 2;
+      auto time = id(homeassistant_time).now();
 
       //Header
-      it.filled_rectangle(0, 0, it.get_width(), headerHeight, color_blk);
+      it.filled_rectangle(0, 0, width, headerHeight, color_blk);
 
       // Refresh Timestamp with time and day
       // from https://community.home-assistant.io/t/esphome-show-time/348903
       it.printf(10, 2, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000e5d5");
-      it.strftime(35, 4, id(font_refresh_stamp), COLOR_OFF, TextAlign::TOP_LEFT, "%H:%M %a", id(homeassistant_time).now());
+      it.strftime(35, 4, id(font_refresh_stamp), COLOR_OFF, TextAlign::TOP_LEFT, "%H:%M %a", time);
 
       //But also the current date.
-      it.printf(180, 2, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000ebcc");
-      it.strftime(180+25, 4, id(font_refresh_stamp), COLOR_OFF, TextAlign::TOP_LEFT, "%b %d %Y", id(homeassistant_time).now());
+      int current_date_width = get_text_dimension(&it, id(font_refresh_stamp), "%b %d %Y", time, true);
+      it.printf(center-(current_date_width/2)-25, 2, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000ebcc");
+      it.strftime(center-(current_date_width/2), 4, id(font_refresh_stamp), COLOR_OFF, TextAlign::TOP_LEFT, "%b %d %Y", time);
 
       //Battery icon
       std::map<std::string, std::string> battery_icon_map
@@ -590,7 +605,7 @@ display:
         {"batterylow", "\U0000F155"},
         {"batterywarn", "\U0000E19C"}
       };
-      int batt_x = 460; 
+      int batt_x = width-20; 
       int batt_y = 2;
       float batt_v = float(id(battery_adc).state);
       if (0 <= batt_v && batt_v < 3.4) { it.printf(batt_x, batt_y, id(font_battery_glyphs), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterywarn"].c_str()); }
@@ -602,11 +617,10 @@ display:
       row = row + headerHeight;
 
       // TODAY'S TASKS
-      it.printf(240, row, id(font_title), color_red, TextAlign::TOP_CENTER, "TO DO");
+      it.printf(center/2, row, id(font_title), color_red, TextAlign::TOP_CENTER, "TODAY");
       row = row + spacing_title;
       
-      it.horizontal_line(line_spacing, row-10, 480-(line_spacing*2), color_red);
-      whiteout_row = row;
+      whiteout_row = row + 4;
 
       std::map<std::string, std::string> category_map
         {
@@ -624,22 +638,29 @@ display:
           std::string event = full_text.substr(3); // Get the rest of the string
           it.printf(col, row+2, id(font_battery_glyphs), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
           it.printf(col+25, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
+          it.printf(center-10, row, id(font_time), color_red, TextAlign::TOP_RIGHT, "%s", id(today_times)[i].c_str()); 
           row = row + spacing_today;
         }
       }else{
         it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", "Nothing today!");
         row = row + spacing_today;
       }
-
-      it.filled_rectangle((it.get_width()-col), whiteout_row, (it.get_width()-col), row, COLOR_OFF);
-
+      
+      it.filled_rectangle(center, whiteout_row, width, it.get_height(), COLOR_OFF);
+      
       // UPCOMING TASKS
-      row = row - spacing_today + (spacing_small_title);
-      it.printf(240, row, id(font_small_title), color_red, TextAlign::TOP_CENTER, "UPCOMING");
-      row = row + spacing_small_title;
-      it.horizontal_line(line_spacing, row, 480-(line_spacing*2), color_red);
-      row = row + 5;
-      whiteout_row = row;
+      col = center + 15;
+
+      row = headerHeight;
+      it.printf((center/2)+center, row, id(font_title), color_red, TextAlign::TOP_CENTER, "UPCOMING");
+      row = row + spacing_title;
+
+      it.vertical_line(center, headerHeight+spacing_title, it.get_height(), color_red);
+      it.horizontal_line(0, row, width, color_red);
+      it.horizontal_line(0, row+1, width, color_blk);
+      it.horizontal_line(0, row+2, width, color_blk);
+      
+      row = whiteout_row;
 
       for(size_t i = 0; i< id(upcoming).size();i++){
         if ((row <= lastrow) && (! (id(upcoming)[i].isEmpty()))) {
@@ -653,11 +674,67 @@ display:
           
           it.printf(col+5, row, id(font_battery_glyphs), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
           it.printf(col+30, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
+          it.printf(width-10, row, id(font_time), color_red, TextAlign::TOP_RIGHT, "%s", id(upcoming_times)[i].c_str());
           row = row + spacing_upcoming_item;
         }
       }
 
-      it.filled_rectangle((it.get_width()-col), whiteout_row, (it.get_width()-col), row, COLOR_OFF);
+      // Draw Calendar
+      
+      int days_padding_bottom = 10;
+  
+      int circle_size = 17;
+  
+      int cell_size_width = 30;
+      int cell_size_height = 30;
+
+      int calendar_x_pos = 15;
+      int calendar_y_pos = it.get_height() - (6 * cell_size_height) - 10;
+
+      it.horizontal_line(0, calendar_y_pos - 10, center, color_red); // line above calendar
+
+      char cal[7][7][3]; // Calendar matrix including weekdays
+      int days_line_left_position = 0;
+      int days_line_right_position = 0;
+  
+      get_calendar_matrix(time.year, time.month, cal);
+  
+      for (int i = 0; i < 7; i++) {
+        for (int j = 0; j < 7; j++) {
+          int x_pos = calendar_x_pos + cell_size_width * j;
+          int y_pos = calendar_y_pos + cell_size_height * i;
+  
+          if (i == 0) {
+            // Header (day names)
+            it.printf(x_pos, y_pos, id(font_upcoming_date), color_red, TextAlign::CENTER, "%s", cal[i][j]);
+            if (j == 0) {
+              days_line_left_position = x_pos - (get_text_width( & it, id(font_upcoming_item), "%s", cal[i][j]) / 2);
+            } else if (j == 6) {
+              days_line_right_position = x_pos + (get_text_width( & it, id(font_upcoming_item), "%s", cal[i][j]) / 2);
+            }
+          } else {
+            // Day numbers
+            y_pos += days_padding_bottom;
+            if (atoi(cal[i][j]) == time.day_of_month) {
+              // Highlight current day
+              it.filled_circle(x_pos, y_pos - 1, circle_size, color_blk);
+              it.printf(x_pos, y_pos, id(font_upcoming_item), COLOR_OFF, TextAlign::CENTER, "%s", cal[i][j]);
+            } else {
+              if(j > 6){
+                it.printf(x_pos, y_pos, id(font_upcoming_item), color_red, TextAlign::CENTER, "%s", cal[i][j]);
+              } else {
+                it.printf(x_pos, y_pos, id(font_upcoming_item), color_blk, TextAlign::CENTER, "%s", cal[i][j]);
+              }
+              
+            }
+          }
+        }
+        if (i == 1) {
+          it.line(days_line_left_position, calendar_y_pos + (cell_size_height / 2), days_line_right_position, calendar_y_pos + (cell_size_height / 2), color_blk);
+        }
+      }
+  
+      // End Draw Calendar
 
 
 
