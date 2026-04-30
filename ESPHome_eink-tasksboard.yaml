@@ -13,6 +13,7 @@ substitutions:
   ha_disable_update: input_boolean.eink_tasksboard_disable_update
   ha_disable_deep_sleep: input_boolean.eink_tasksboard_disable_deep_sleep
   ha_tasks_data: sensor.eink_tasksboard_data
+  ha_weather_entity: weather.openweathermap
   ha_wake_times: sensor.eink_tasksboard_wake_times
 
 # A physical switch to disable deep sleep (optional, if no physical switch is attached then no problem)
@@ -400,6 +401,40 @@ font:
       - "\U0000e5d5" # Refresh
       - "\U0000ebcc" # Calendar
       - "\U0000e7e9" #Birthday cake
+  - file: 'fonts/materialdesignicons-webfont.ttf'
+    id: font_mdi_large
+    size: 96
+    glyphs: &mdi-weather-glyphs
+      - "\U000F0590" # mdi-weather-cloudy
+      - "\U000F0F2F" # mdi-weather-cloudy-alert
+      - "\U000F0E6E" # mdi-weather-cloudy-arrow-right
+      - "\U000F0591" # mdi-weather-fog
+      - "\U000F0592" # mdi-weather-hail
+      - "\U000F0F30" # mdi-weather-hazy
+      - "\U000F0898" # mdi-weather-hurricane
+      - "\U000F0593" # mdi-weather-lightning
+      - "\U000F067E" # mdi-weather-lightning-rainy
+      - "\U000F0594" # mdi-weather-night
+      - "\U000F0F31" # mdi-weather-night-partly-cloudy
+      - "\U000F0595" # mdi-weather-partly-cloudy
+      - "\U000F0F32" # mdi-weather-partly-lightning
+      - "\U000F0F33" # mdi-weather-partly-rainy
+      - "\U000F0F34" # mdi-weather-partly-snowy
+      - "\U000F0F35" # mdi-weather-partly-snowy-rainy
+      - "\U000F0596" # mdi-weather-pouring
+      - "\U000F0597" # mdi-weather-rainy
+      - "\U000F0598" # mdi-weather-snowy
+      - "\U000F0F36" # mdi-weather-snowy-heavy
+      - "\U000F067F" # mdi-weather-snowy-rainy
+      - "\U000F0599" # mdi-weather-sunny
+      - "\U000F0F37" # mdi-weather-sunny-alert
+      - "\U000F14E4" # mdi-weather-sunny-off
+      - "\U000F059A" # mdi-weather-sunset
+      - "\U000F059B" # mdi-weather-sunset-down
+      - "\U000F059C" # mdi-weather-sunset-up
+      - "\U000F0F38" # mdi-weather-tornado
+      - "\U000F059D" # mdi-weather-windy
+      - "\U000F059E" # mdi-weather-windy-variant
 
 sensor:  
   # Create sensors for monitoring the board remotely.
@@ -477,6 +512,21 @@ sensor:
     on_value:
       then:
          - lambda: 'id(wake_time_helper_updated) = true;'
+  # Weather sensor
+  - platform: homeassistant
+    entity_id: '${ha_weather_entity}'
+    attribute: temperature
+    id: weather_now_temperature
+    on_value:
+      then:
+         - lambda: 'id(data_updated) = true;'
+  - platform: homeassistant
+    entity_id: '${ha_weather_entity}'
+    attribute: apparent_temperature
+    id: weather_now_apparent_temperature
+    on_value:
+      then:
+         - lambda: 'id(data_updated) = true;'
 
 text_sensor:
   - platform: version
@@ -538,6 +588,14 @@ text_sensor:
               id(upcoming_dates).push_back(String(elem["date"].as<String>().c_str()));
               id(upcoming_times).push_back(String(elem["start_time"].as<String>().c_str()));
             }
+  
+  # Weather sensors
+  - platform: homeassistant
+    entity_id: '${ha_weather_entity}'
+    id: weather_now_condition
+    on_value:
+      then:
+         - lambda: 'id(data_updated) = true;'
 
 # Now render everything on the ePaper screen.
 display:
@@ -657,8 +715,8 @@ display:
 
       it.vertical_line(center, headerHeight+spacing_title, it.get_height(), color_red);
       it.horizontal_line(0, row, width, color_red);
-      it.horizontal_line(0, row+1, width, color_blk);
-      it.horizontal_line(0, row+2, width, color_blk);
+      it.horizontal_line(0, row+1, width, color_red);
+      it.horizontal_line(0, row+2, width, color_red);
       
       row = whiteout_row;
 
@@ -688,8 +746,10 @@ display:
       int cell_size_width = 30;
       int cell_size_height = 30;
 
+      int calendar_height = (6 * cell_size_height) + days_padding_bottom;
+      int calendar_width = 7 * cell_size_width + 10;
       int calendar_x_pos = 15;
-      int calendar_y_pos = it.get_height() - (6 * cell_size_height) - 10;
+      int calendar_y_pos = it.get_height() - calendar_height;
 
       it.horizontal_line(0, calendar_y_pos - 10, center, color_red); // line above calendar
 
@@ -736,5 +796,56 @@ display:
   
       // End Draw Calendar
 
+      //Start draw weather:
+      // Map weather states to MDI characters.
+      std::map<std::string, std::string> weather_icon_map
+        {
+          {"cloudy", "\U000F0590"},
+          {"cloudy-alert", "\U000F0F2F"},
+          {"cloudy-arrow-right", "\U000F0E6E"},
+          {"clear-night", "\U000F0594"},
+          {"fog", "\U000F0591"},
+          {"hail", "\U000F0592"},
+          {"hazy", "\U000F0F30"},
+          {"hurricane", "\U000F0898"},
+          {"lightning", "\U000F0593"},
+          {"lightning-rainy", "\U000F067E"},
+          {"night", "\U000F0594"},
+          {"night-partly-cloudy", "\U000F0F31"},
+          {"partlycloudy", "\U000F0595"},
+          {"partly-lightning", "\U000F0F32"},
+          {"partly-rainy", "\U000F0F33"},
+          {"partly-snowy", "\U000F0F34"},
+          {"partly-snowy-rainy", "\U000F0F35"},
+          {"pouring", "\U000F0596"},
+          {"rainy", "\U000F0597"},
+          {"snowy", "\U000F0598"},
+          {"snowy-heavy", "\U000F0F36"},
+          {"snowy-rainy", "\U000F067F"},
+          {"sunny", "\U000F0599"},
+          {"sunny-alert", "\U000F0F37"},
+          {"sunny-off", "\U000F14E4"},
+          {"sunset", "\U000F059A"},
+          {"sunset-down", "\U000F059B"},
+          {"sunset-up", "\U000F059C"},
+          {"tornado", "\U000F0F38"},
+          {"windy", "\U000F059D"},
+          {"windy-variant", "\U000F059E"},
+        };
+
+      int weather_x_pos = calendar_width;
+      int weather_y_pos = calendar_y_pos;
+
+      it.vertical_line(weather_x_pos, weather_y_pos - 10, calendar_height+20, color_red);
+      //If i wanna be awesome, i could center it in the box i have.
+      int middle_of_box_x = weather_x_pos + ((center - weather_x_pos) / 2);
+
+      int weather_icon_width = 100;
+      int weather_icon_height = 100;
+
+      // CURRENT WEATHER
+      it.printf(middle_of_box_x, weather_y_pos+20, id(font_mdi_large), color_blk, TextAlign::TOP_CENTER, "%s", weather_icon_map[id(weather_now_condition).state.c_str()].c_str());
+      it.printf(middle_of_box_x - weather_icon_width / 2, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%2.0f°C", id(weather_now_temperature).state);
+      it.printf(middle_of_box_x + weather_icon_width / 2, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_blk, TextAlign::TOP_RIGHT, "%2.0f°C", id(weather_now_apparent_temperature).state);
 
 
