@@ -149,7 +149,7 @@ color:
 spi:
   clk_pin: ${clk_pin}
   mosi_pin: ${mosi_pin}
-      
+
 # Global variables for detecting if the display needs to be refreshed.
 globals:
   - id: data_updated
@@ -214,6 +214,20 @@ script:
           condition:
             binary_sensor.is_off: disable_update
           then:
+            - homeassistant.action:
+                action: weather.get_forecasts
+                data:
+                  type: daily
+                  entity_id: '${ha_weather_entity}'
+                capture_response: true
+                on_success:
+                  - lambda: |-
+                      // Parse the JSON response and update the weather sensors
+                      JsonObjectConst today = response["response"]["${ha_weather_entity}"]["forecast"][0];
+                      ESP_LOGI("Weather", "Max temperature today: %.1f", today["temperature"].as<float>());
+                      id(weather_now_max_temperature).publish_state(today["temperature"].as<float>());
+                      ESP_LOGI("Weather", "Min temperature today: %.1f", today["templow"].as<float>());
+                      id(weather_now_min_temperature).publish_state(today["templow"].as<float>());
             - lambda: 'id(recorded_display_refresh) += 1;'
             - lambda: 'id(display_last_update).publish_state(id(homeassistant_time).now().timestamp);'
             - logger.log: "Refreshing display..."
@@ -383,7 +397,7 @@ font:
   # Get it here: https://github.com/Templarian/MaterialDesign-Webfont/
 
   # Encoding glyphs from here: https://community.home-assistant.io/t/display-materialdesign-icons-on-esphome-attached-to-screen/199790/16
-  - file: 
+  - file:
       type: gfonts
       family: 'Material+Symbols+Outlined'
     id: font_battery_glyphs
@@ -400,10 +414,12 @@ font:
       - "\U0000f036" # Moon
       - "\U0000e5d5" # Refresh
       - "\U0000ebcc" # Calendar
-      - "\U0000e7e9" #Birthday cake
+      - "\U0000e7e9" # Birthday cake
+      - "\U0000f379" # thermometer-chevron-up
+      - "\U0000f37a" # thermometer-chevron-down
   - file: 'fonts/materialdesignicons-webfont.ttf'
     id: font_mdi_large
-    size: 96
+    size: 120
     glyphs: &mdi-weather-glyphs
       - "\U000F0590" # mdi-weather-cloudy
       - "\U000F0F2F" # mdi-weather-cloudy-alert
@@ -436,7 +452,7 @@ font:
       - "\U000F059D" # mdi-weather-windy
       - "\U000F059E" # mdi-weather-windy-variant
 
-sensor:  
+sensor:
   # Create sensors for monitoring the board remotely.
   - platform: template
     name: "${friendly_name} Display Last Update"
@@ -517,16 +533,24 @@ sensor:
     entity_id: '${ha_weather_entity}'
     attribute: temperature
     id: weather_now_temperature
+    device_class: "temperature"
     on_value:
       then:
          - lambda: 'id(data_updated) = true;'
-  - platform: homeassistant
-    entity_id: '${ha_weather_entity}'
-    attribute: apparent_temperature
-    id: weather_now_apparent_temperature
+  - platform: template
+    id: weather_now_max_temperature
+    device_class: "temperature"
+    update_interval: never
     on_value:
       then:
          - lambda: 'id(data_updated) = true;'
+  - platform: template
+    id: weather_now_min_temperature
+    device_class: "temperature"
+    update_interval: never
+    on_value:
+      then:
+        - lambda: 'id(data_updated) = true;'
 
 text_sensor:
   - platform: version
@@ -572,7 +596,7 @@ text_sensor:
     entity_id: '${ha_tasks_data}'
     attribute: upcoming
     id: temp_upcoming
-    on_value: 
+    on_value:
       then:
         - lambda: 'id(data_updated) = true;'
         - lambda: |-
@@ -840,12 +864,22 @@ display:
       //If i wanna be awesome, i could center it in the box i have.
       int middle_of_box_x = weather_x_pos + ((center - weather_x_pos) / 2);
 
-      int weather_icon_width = 100;
-      int weather_icon_height = 100;
+      int weather_icon_width = 130;
+      int weather_icon_height = 130;
 
       // CURRENT WEATHER
       it.printf(middle_of_box_x, weather_y_pos+20, id(font_mdi_large), color_blk, TextAlign::TOP_CENTER, "%s", weather_icon_map[id(weather_now_condition).state.c_str()].c_str());
-      it.printf(middle_of_box_x - weather_icon_width / 2, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%2.0f°C", id(weather_now_temperature).state);
-      it.printf(middle_of_box_x + weather_icon_width / 2, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_blk, TextAlign::TOP_RIGHT, "%2.0f°C", id(weather_now_apparent_temperature).state);
+      
+      // TEMPERATURE
+      auto color_temp = (id(weather_now_min_temperature).state >= 25) ? color_red : color_blk;
+      it.printf(weather_x_pos + 10, weather_y_pos+20 + weather_icon_height, id(font_battery_glyphs), color_temp, TextAlign::TOP_LEFT, "\U0000f37a");
+      it.printf(weather_x_pos + 10 + 22, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_temp, TextAlign::TOP_LEFT, "%2.0f°", id(weather_now_min_temperature).state);
+      
+      color_temp = (id(weather_now_temperature).state >= 25) ? color_red : color_blk;
+      it.printf(middle_of_box_x, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_temp, TextAlign::TOP_CENTER, "%2.0f°", id(weather_now_temperature).state);
+      
+      color_temp = (id(weather_now_max_temperature).state >= 25) ? color_red : color_blk;
+      it.printf(center - 10, weather_y_pos+20 + weather_icon_height, id(font_battery_glyphs), color_temp, TextAlign::TOP_RIGHT, "\U0000f379");
+      it.printf(center - 10 - 22, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_temp, TextAlign::TOP_RIGHT, "%2.0f°", id(weather_now_max_temperature).state);
 
 
