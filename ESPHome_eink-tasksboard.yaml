@@ -653,23 +653,21 @@ display:
       
       int padding = 10;
       
-      int col = 15;
+      int col = padding;
       int row = 0;
-      // make the spacing the font size + a bit more
-      int spacing_title = 36;
-      int spacing_today = 30;
-      int spacing_upcoming_date = 22;
-      int spacing_upcoming_item = 28;
-      int line_spacing = 40;
+      int spacing_title = get_text_dimension(&it, id(font_title), "%s", "TODAY", false);
+      int spacing_today = get_text_dimension(&it, id(font_roboto_700_24), "%s", "Sample Task Text", false) + 2;
+      int spacing_upcoming_date = get_text_dimension(&it, id(font_roboto_500_20), "%s", "Sunday August 25:", false) + 2;
+      int spacing_upcoming_item = get_text_dimension(&it, id(font_roboto_700_20), "%s", "Sample Upcoming Task", false) + 2;
       int lastrow = it.get_height() - spacing_upcoming_item - spacing_upcoming_date;
-      int whiteout_row = 0; // this is used to make the left and right sides evenly blank, so the text doesn't look like its running under the frame
-      int headerHeight = 28;
+      int header_height = 28;
+      
       int width = it.get_width();
       int center = it.get_width() / 2;
       auto time = id(homeassistant_time).now();
 
       //Header
-      it.filled_rectangle(0, 0, width, headerHeight, color_blk);
+      it.filled_rectangle(0, 0, width, header_height, color_blk);
 
       // Refresh Timestamp with time and day
       // from https://community.home-assistant.io/t/esphome-show-time/348903
@@ -678,8 +676,8 @@ display:
 
       //But also the current date.
       int current_date_width = get_text_dimension(&it, id(font_roboto_400_20), "%b %d %Y", time, true);
-      it.printf(center-(current_date_width/2)-25, 2, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000ebcc");
-      it.strftime(center-(current_date_width/2), 4, id(font_roboto_400_20), COLOR_OFF, TextAlign::TOP_LEFT, "%b %d %Y", time);
+      it.printf(center - (current_date_width / 2), 2, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_RIGHT, "%s", "\U0000ebcc");
+      it.strftime(center, 4, id(font_roboto_400_20), COLOR_OFF, TextAlign::TOP_CENTER, "%b %d %Y", time);
 
       //Battery icon
       std::map<std::string, std::string> battery_icon_map
@@ -689,22 +687,22 @@ display:
         {"batterylow", "\U0000F155"},
         {"batterywarn", "\U0000E19C"}
       };
-      int batt_x = width-20; 
+      int batt_x = width - padding; 
       int batt_y = 2;
       float batt_v = float(id(battery_adc).state);
-      if (0 <= batt_v && batt_v < 3.4) { it.printf(batt_x, batt_y, id(font_mdi_22), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterywarn"].c_str()); }
-      if (3.4 <= batt_v && batt_v < 3.6) { it.printf(batt_x, batt_y, id(font_mdi_22), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterylow"].c_str()); }
-      if (3.6 <= batt_v && batt_v < 3.8) { it.printf(batt_x, batt_y, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterymed"].c_str()); }
-      if (3.8 <= batt_v && batt_v < 4.3) { it.printf(batt_x, batt_y, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_CENTER, "%s", battery_icon_map["batteryhigh"].c_str()); }
+      if (0 <= batt_v && batt_v < 3.4) { it.printf(batt_x, batt_y, id(font_mdi_22), color_red, TextAlign::TOP_RIGHT, "%s", battery_icon_map["batterywarn"].c_str()); }
+      if (3.4 <= batt_v && batt_v < 3.6) { it.printf(batt_x, batt_y, id(font_mdi_22), color_red, TextAlign::TOP_RIGHT, "%s", battery_icon_map["batterylow"].c_str()); }
+      if (3.6 <= batt_v && batt_v < 3.8) { it.printf(batt_x, batt_y, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_RIGHT, "%s", battery_icon_map["batterymed"].c_str()); }
+      if (3.8 <= batt_v && batt_v < 4.3) { it.printf(batt_x, batt_y, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_RIGHT, "%s", battery_icon_map["batteryhigh"].c_str()); }
       // battery icon not displayed if voltage is above 4.3V (but ADC must still be connected to 5V pin)
 
-      row = row + headerHeight;
-
-      // TODAY'S TASKS
-      it.printf(center/2, row, id(font_title), color_red, TextAlign::TOP_CENTER, "TODAY");
-      row = row + spacing_title;
+      //HEADER DONE
       
-      whiteout_row = row + 4;
+      //TITLES:
+      it.printf(center/2, header_height, id(font_title), color_red, TextAlign::TOP_CENTER, "TODAY");
+      
+      // TODAY'S TASKS
+      row = header_height + spacing_title + 3; // to account for the horizontal line
 
       std::map<std::string, std::string> category_map
         {
@@ -720,31 +718,31 @@ display:
           std::string full_text = std::string(id(today)[i].c_str()); // Get the full string
           std::string category = full_text.substr(0, 2); // Extract the first two characters
           std::string event = full_text.substr(3); // Get the rest of the string
+      
           it.printf(col, row+2, id(font_mdi_22), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
           it.printf(col+25, row, id(font_roboto_700_24), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
-          it.printf(center-10, row, id(font_roboto_500_18_numeric), color_red, TextAlign::TOP_RIGHT, "%s", id(today_times)[i].c_str()); 
+      
+          it.printf(center-10, row+4, id(font_roboto_500_18_numeric), color_red, TextAlign::TOP_RIGHT, "%s", id(today_times)[i].c_str()); 
           row = row + spacing_today;
         }
-      }else{
+      } else {
         it.printf(col, row, id(font_roboto_700_24), color_blk, TextAlign::TOP_LEFT, "%s", "Nothing today!");
         row = row + spacing_today;
       }
-      
-      it.filled_rectangle(center, whiteout_row, width, it.get_height(), COLOR_OFF);
+
       
       // UPCOMING TASKS
-      col = center + 15;
+      col = center + padding;
 
-      row = headerHeight;
-      it.printf((center/2)+center, row, id(font_title), color_red, TextAlign::TOP_CENTER, "UPCOMING");
-      row = row + spacing_title;
+      it.printf(center + (center/2), header_height, id(font_title), color_red, TextAlign::TOP_CENTER, "UPCOMING");
+      row = header_height + spacing_title;
 
-      it.vertical_line(center, headerHeight+spacing_title, it.get_height(), color_red);
+      it.vertical_line(center, header_height+spacing_title, it.get_height(), color_red);
       it.horizontal_line(0, row, width, color_red);
       it.horizontal_line(0, row+1, width, color_red);
       it.horizontal_line(0, row+2, width, color_red);
       
-      row = whiteout_row;
+      row = row + 3; // to account for the horizontal lines
 
       for(size_t i = 0; i< id(upcoming).size();i++){
         if ((row <= lastrow) && (! (id(upcoming)[i].isEmpty()))) {
@@ -756,7 +754,7 @@ display:
           std::string category = full_text.substr(0, 2); // Extract the first two characters
           std::string event = full_text.substr(3); // Get the rest of the string
           
-          it.printf(col+5, row, id(font_mdi_22), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
+          it.printf(col+5, row-1, id(font_mdi_22), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
           it.printf(col+30, row, id(font_roboto_700_20), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
           it.printf(width-10, row, id(font_roboto_500_18_numeric), color_red, TextAlign::TOP_RIGHT, "%s", id(upcoming_times)[i].c_str());
           row = row + spacing_upcoming_item;
@@ -764,7 +762,6 @@ display:
       }
 
       // Draw Calendar
-      
       int days_padding_bottom = 10;
   
       int circle_size = 17;
