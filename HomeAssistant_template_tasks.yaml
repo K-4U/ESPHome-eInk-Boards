@@ -1,20 +1,21 @@
 - trigger:
     - platform: time_pattern
       minutes: /3
-      variables:
-        # This will be used as a filter in text sensors so that characters not present in the font will not be printed
-        # Copy and paste your list from glyphs in the fonts section of your ESPHome YAML and escape certain characters
-        # so backslash \ becomes \\ and double-quote " becomes \" but single-quote ' needs to be doubled ''
-        # Make sure your list has "[^ at the front and ]" at the end (this is a regular expression, with quotes around it)
-        allowed_characters: "[^! \"#$%&''()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz°]"
+      #variables: []
+      # This will be used as a filter in text sensors so that characters not present in the font will not be printed
+      # Copy and paste your list from glyphs in the fonts section of your ESPHome YAML and escape certain characters
+      # so backslash \ becomes \\ and double-quote " becomes \" but single-quote ' needs to be doubled ''
+      # Make sure your list has "[^ at the front and ]" at the end (this is a regular expression, with quotes around it)
+      # allowed_characters: "[^! \"#$%&''()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz°]"
   action:
     - service: todo.get_items
       data:
         status: needs_action
       target:
         entity_id:
-          - todo.to_do
-          - todo.car
+          - todo.prive
+          - todo.work
+          - todo.client
       response_variable: mylist
     - service: calendar.get_events
       data:
@@ -22,9 +23,12 @@
         end_date_time: "{{now().date() + timedelta(days=29)}}"
       target:
         entity_id:
-         - calendar.family
-         - calendar.holidays_in_south_korea
-         - calendar.bills
+          - calendar.agenda
+          - calendar.private
+          - calendar.christian_holidays
+          - calendar.partner
+          - calendar.fasen_van_de_maan
+          - calendar.birthdays
       response_variable: mycalendar
   sensor:
     - name: eInk TasksBoard Data
@@ -36,40 +40,65 @@
           {%- set list = namespace(todo = []) -%}
           {# -- search todo lists and calendars below this point -- #}
           {# search calendar #}
-          {%- for events in mycalendar["calendar.family"]["events"] -%}
-            {%- if "start" in events and (now().date()|string) in events.start -%}
-              {%- set list.todo = list.todo + [(events.summary)] -%}
+          {%- for events in mycalendar["calendar.private"]["events"] -%}
+            {%- if ("start" in events and (now().date()|string) in events.start) and ("end" in events and (now().timestamp() < as_datetime(events.end).timestamp())) -%}
+              {%- set list.todo = list.todo + [{'event': "P: " + (events.summary), 'start_time': (as_datetime(events.start).strftime('%H:%M'))}] -%}
               {%- set counter.total = counter.total + 1 -%}
             {%- endif -%}
           {%- endfor -%}
           {# search calendar and add a note#}
-          {%- for events in mycalendar["calendar.holidays_in_south_korea"]["events"] -%}
-            {%- if "start" in events and (now().date()|string) in events.start -%}
-              {%- set list.todo = list.todo + ["Korea: " + (events.summary)] -%}
+          {%- for events in mycalendar["calendar.partner"]["events"] -%}
+            {%- if ("start" in events and (now().date()|string) in events.start) and ("end" in events and (now().timestamp() < as_datetime(events.end).timestamp())) -%}
+              {%- set list.todo = list.todo + [{'event': "F: " + (events.summary), 'start_time': (as_datetime(events.start).strftime('%H:%M'))}] -%}
               {%- set counter.total = counter.total + 1 -%}
             {%- endif -%}
           {%- endfor -%}
+          {# search calendar and add a note#}
+          {%- for events in mycalendar["calendar.fasen_van_de_maan"]["events"] -%}
+            {%- if "start" in events and (now().date()|string) in events.start -%}
+              {%- set list.todo = list.todo + [{'event': "M: " + (events.summary), 'start_time': ''}] -%}
+              {%- set counter.total = counter.total + 1 -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {# search calendar and add a note#}
+          {%- for events in mycalendar["calendar.agenda"]["events"] -%}
+            {%- if ("start" in events and (now().date()|string) in events.start) and ("end" in events and (now().timestamp() < as_datetime(events.end).timestamp())) -%}
+              {%- set list.todo = list.todo + [{'event': "W: " + (events.summary), 'start_time': (as_datetime(events.start).strftime('%H:%M'))}] -%}
+              {%- set counter.total = counter.total + 1 -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {# search calendar and add a note#}
+          {%- for events in mycalendar["calendar.birthdays"]["events"] -%}
+            {%- if ("start" in events and (now().date()|string) in events.start) and ("end" in events and (now().timestamp() < as_datetime(events.end).timestamp())) -%}
+              {%- set list.todo = list.todo + [{'event':"B: " + (events.summary), 'start_time': ''}] -%}
+              {%- set counter.total = counter.total + 1 -%}
+            {%- endif -%}
+          {%- endfor -%}
+
           {# search todo list #}
-          {%- for items in mylist["todo.to_do"]["items"] -%}
+          {%- for items in mylist["todo.prive"]["items"] -%}
             {%- if "due" in items and items.due <= states('sensor.date') -%}
-              {%- set list.todo = list.todo + [(items.summary)] -%}
+              {%- set list.todo = list.todo + [{'event': "P: " + (items.summary), 'start_time': ''}] -%}
               {%- set counter.total = counter.total + 1 -%}
             {%- endif -%}
           {%- endfor -%}
-          {# search todo list and add a note #}
-          {%- for items in mylist["todo.car"]["items"] -%}
-            {%- if "due" in items and items.due <= states('sensor.date') -%}
-              {%- set list.todo = list.todo + ["Car: " + (items.summary)] -%}
-              {%- set counter.total = counter.total + 1 -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {# search calendar and add a note #}
-          {%- for events in mycalendar["calendar.bills"]["events"] -%}
-            {%- if "start" in events and (now().date()|string) in events.start -%}
-              {%- set list.todo = list.todo + ["Bills: " + (events.summary)] -%}
-              {%- set counter.total = counter.total + 1 -%}
-            {%- endif -%}
-          {%- endfor -%}
+          {# Work related. Let's not do those in the weekend #}
+          {%- if now().weekday() < 5 -%}
+            {# search todo list and add a note #}
+            {%- for items in mylist["todo.work"]["items"] -%}
+              {%- if "due" in items and items.due <= states('sensor.date') -%}
+                {%- set list.todo = list.todo + [{'event': "W: " + (items.summary), 'start_time': ''}] -%}
+                {%- set counter.total = counter.total + 1 -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {# search todo list and add a note #}
+            {%- for items in mylist["todo.client"]["items"] -%}
+              {%- if "due" in items and items.due <= states('sensor.date') -%}
+                {%- set list.todo = list.todo + [{'event': "J: " + (items.summary), 'start_time': ''}] -%}
+                {%- set counter.total = counter.total + 1 -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endif -%} {# week filter #}
           {# -- end searching -- #}
           {{list.todo | default('') }}
         upcoming: >
@@ -79,123 +108,52 @@
           {%- for v in range(latest_date) -%}
             {# -- search todo lists and calendars below this point -- #}
             {# search calendar #}
-            {%- for events in mycalendar["calendar.family"]["events"] -%}
+            {%- for events in mycalendar["calendar.private"]["events"] -%}
               {%- if "start" in events and ((now().date() + timedelta(days=v+1))|string) in events.start -%}
-                {%- set list.todo = list.todo + [(as_datetime(events.start).strftime('%A %B %-d'))] -%}
-                {%- set list.todo = list.todo + [(events.summary)] -%}
+                {%- set list.todo = list.todo + [{'date': (as_datetime(events.start).strftime('%A %B %-d')), 'event': "P: " + (events.summary), 'start_time': (as_datetime(events.start).strftime('%H:%M'))}] -%}
+                {%- set counter.total = counter.total + 1 -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- for events in mycalendar["calendar.partner"]["events"] -%}
+              {%- if "start" in events and ((now().date() + timedelta(days=v+1))|string) in events.start -%}
+                {%- set list.todo = list.todo + [{'date': (as_datetime(events.start).strftime('%A %B %-d')), 'event': "F: " + (events.summary), 'start_time': (as_datetime(events.start).strftime('%H:%M'))}] -%}
+                {%- set counter.total = counter.total + 1 -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- for events in mycalendar["calendar.birthdays"]["events"] -%}
+              {%- if "start" in events and ((now().date() + timedelta(days=v+1))|string) in events.start -%}
+                {%- set list.todo = list.todo + [{'date': (as_datetime(events.start).strftime('%A %B %-d')), 'event': "B: " + (events.summary), 'start_time': (as_datetime(events.start).strftime('%H:%M'))}] -%}
                 {%- set counter.total = counter.total + 1 -%}
               {%- endif -%}
             {%- endfor -%}
             {# search todo list #}
-            {%- for items in mylist["todo.to_do"]["items"] -%}
+            {%- for items in mylist["todo.prive"]["items"] -%}
               {%- if "due" in items and ((now().date() + timedelta(days=v+1))|string) in items.due -%}
-                {%- set list.todo = list.todo + [(as_datetime(items.due).strftime('%A %B %-d'))] -%}
-                {%- set list.todo = list.todo + [(items.summary)] -%}
+                {%- set item_date = as_datetime(items.due).strftime('%A %B %-d') -%}
+                {%- set list.todo = list.todo + [{'date': item_date, 'event': "P: " + items.summary, 'start_time': ''}] -%}
+                {%- set counter.total = counter.total + 1 -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- for items in mylist["todo.work"]["items"] -%}
+              {%- if "due" in items and ((now().date() + timedelta(days=v+1))|string) in items.due -%}
+                {%- set item_date = as_datetime(items.due).strftime('%A %B %-d') -%}
+                {%- set list.todo = list.todo + [{'date': item_date, 'event': "W: " + items.summary, 'start_time': ''}] -%}
+                {%- set counter.total = counter.total + 1 -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- for items in mylist["todo.client"]["items"] -%}
+              {%- if "due" in items and ((now().date() + timedelta(days=v+1))|string) in items.due -%}
+                {%- set item_date = as_datetime(items.due).strftime('%A %B %-d') -%}
+                {%- set list.todo = list.todo + [{'date': item_date, 'event': "J: " + items.summary, 'start_time': ''}] -%}
                 {%- set counter.total = counter.total + 1 -%}
               {%- endif -%}
             {%- endfor -%}
             {# -- end searching -- #}
-            {%- if counter.total >= 20 -%}
+            {%- if counter.total >= 25 -%}
               {%- break -%}
             {%- endif -%}
           {%- endfor -%}
           {{list.todo | default('') }}
-        today_0: >
-          {{ state_attr(this.entity_id, 'today')[0] | default('') | regex_replace(allowed_characters, "") }}
-        today_1: >
-          {{ state_attr(this.entity_id, 'today')[1] | default('') | regex_replace(allowed_characters, "") }}
-        today_2: >
-          {{ state_attr(this.entity_id, 'today')[2] | default('') | regex_replace(allowed_characters, "") }}
-        today_3: >
-          {{ state_attr(this.entity_id, 'today')[3] | default('') | regex_replace(allowed_characters, "") }}
-        today_4: >
-          {{ state_attr(this.entity_id, 'today')[4] | default('') | regex_replace(allowed_characters, "") }}
-        today_5: >
-          {{ state_attr(this.entity_id, 'today')[5] | default('') | regex_replace(allowed_characters, "") }}
-        today_6: >
-          {{ state_attr(this.entity_id, 'today')[6] | default('') | regex_replace(allowed_characters, "") }}
-        today_7: >
-          {{ state_attr(this.entity_id, 'today')[7] | default('') | regex_replace(allowed_characters, "") }}
-        today_8: >
-          {{ state_attr(this.entity_id, 'today')[8] | default('') | regex_replace(allowed_characters, "") }}
-        today_9: >
-          {{ state_attr(this.entity_id, 'today')[9] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_0: >
-          {{ state_attr(this.entity_id, 'upcoming')[0] | default('') }}
-        upcoming_item_0: >
-          {{ state_attr(this.entity_id, 'upcoming')[1] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_1: >
-          {{ state_attr(this.entity_id, 'upcoming')[2] | default('') }}
-        upcoming_item_1: >
-          {{ state_attr(this.entity_id, 'upcoming')[3] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_2: >
-          {{ state_attr(this.entity_id, 'upcoming')[4] | default('') }}
-        upcoming_item_2: >
-          {{ state_attr(this.entity_id, 'upcoming')[5] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_3: >
-          {{ state_attr(this.entity_id, 'upcoming')[6] | default('') }}
-        upcoming_item_3: >
-          {{ state_attr(this.entity_id, 'upcoming')[7] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_4: >
-          {{ state_attr(this.entity_id, 'upcoming')[8] | default('') }}
-        upcoming_item_4: >
-          {{ state_attr(this.entity_id, 'upcoming')[9] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_5: >
-          {{ state_attr(this.entity_id, 'upcoming')[10] | default('') }}
-        upcoming_item_5: >
-          {{ state_attr(this.entity_id, 'upcoming')[11] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_6: >
-          {{ state_attr(this.entity_id, 'upcoming')[12] | default('') }}
-        upcoming_item_6: >
-          {{ state_attr(this.entity_id, 'upcoming')[13] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_7: >
-          {{ state_attr(this.entity_id, 'upcoming')[14] | default('') }}
-        upcoming_item_7: >
-          {{ state_attr(this.entity_id, 'upcoming')[15] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_8: >
-          {{ state_attr(this.entity_id, 'upcoming')[16] | default('') }}
-        upcoming_item_8: >
-          {{ state_attr(this.entity_id, 'upcoming')[17] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_9: >
-          {{ state_attr(this.entity_id, 'upcoming')[18] | default('') }}
-        upcoming_item_9: >
-          {{ state_attr(this.entity_id, 'upcoming')[19] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_10: >
-          {{ state_attr(this.entity_id, 'upcoming')[20] | default('') }}
-        upcoming_item_10: >
-          {{ state_attr(this.entity_id, 'upcoming')[21] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_11: >
-          {{ state_attr(this.entity_id, 'upcoming')[22] | default('') }}
-        upcoming_item_11: >
-          {{ state_attr(this.entity_id, 'upcoming')[23] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_12: >
-          {{ state_attr(this.entity_id, 'upcoming')[24] | default('') }}
-        upcoming_item_12: >
-          {{ state_attr(this.entity_id, 'upcoming')[25] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_13: >
-          {{ state_attr(this.entity_id, 'upcoming')[26] | default('') }}
-        upcoming_item_13: >
-          {{ state_attr(this.entity_id, 'upcoming')[27] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_14: >
-          {{ state_attr(this.entity_id, 'upcoming')[28] | default('') }}
-        upcoming_item_14: >
-          {{ state_attr(this.entity_id, 'upcoming')[29] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_15: >
-          {{ state_attr(this.entity_id, 'upcoming')[30] | default('') }}
-        upcoming_item_15: >
-          {{ state_attr(this.entity_id, 'upcoming')[31] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_16: >
-          {{ state_attr(this.entity_id, 'upcoming')[32] | default('') }}
-        upcoming_item_16: >
-          {{ state_attr(this.entity_id, 'upcoming')[33] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_17: >
-          {{ state_attr(this.entity_id, 'upcoming')[34] | default('') }}
-        upcoming_item_17: >
-          {{ state_attr(this.entity_id, 'upcoming')[35] | default('') | regex_replace(allowed_characters, "") }}
-        upcoming_date_18: >
-          {{ state_attr(this.entity_id, 'upcoming')[36] | default('') }}
-        upcoming_item_18: >
-          {{ state_attr(this.entity_id, 'upcoming')[37] | default('') | regex_replace(allowed_characters, "") }}
 
 - trigger:
     - platform: time_pattern
@@ -203,11 +161,16 @@
       variables:
         waketime: >
           {# Edit and order the schedule from midnight 00:00 to 23:59 as needed #}
-          {%- set waketimes = [] %}
-          {%- set waketimes = waketimes + ["01:01"] %}
-          {%- set waketimes = waketimes + ["10:01"] %}
-          {%- set waketimes = waketimes + ["14:01"] %}
-          {%- set waketimes = waketimes + ["18:01"] %}
+          {%- set tmp = namespace(list = []) %}
+          {%- set tmp.list = ["00:01"] %}
+          {%- set tmp.list = tmp.list + ["01:01"] %}
+          {%- for hour in range(6,23)  -%}
+          {% set tmp.list = tmp.list + ["%d:01"%(hour)] %}
+          {% endfor %}
+          {%- set tmp.list = tmp.list + ["22:27"] %}
+          {% set waketimes = tmp.list %}
+
+
           {%- set waketime = namespace(next = "") %}
           {%- set waketime_all = [] %}
           {%- for test in waketimes %}
