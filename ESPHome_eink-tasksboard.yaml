@@ -119,7 +119,7 @@ button:
 
 output:
   - platform: ledc
-    id: statusled
+    id: status_led
     pin:
       number: ${status_led_pin}
       ignore_strapping_warning: true
@@ -128,7 +128,7 @@ light:
   - platform: monochromatic
     id: led1
     name: "LED"
-    output: statusled
+    output: status_led
     internal: true
 
 # Define colors - this design is white on black so this is necessary
@@ -354,17 +354,17 @@ font:
       type: gfonts
       family: Roboto
       weight: 400
-    id: font_refresh_stamp
+    id: font_roboto_400_20
     size: 20
     glyphs: |-
       JanFebMrApyulgSOctNovDTWdhiRfs :1234567890
   # The fonts below this point will be used to display tasks - if you see black squares on your tasksboard, you forgot to include it on the glyphs list!
-  # Easy to forget characters include currency marks. The glyphs under font_today_list and font_upcoming_item should match the filter in your Home Assistant YAML!
+  # Easy to forget characters include currency marks. The glyphs under font_roboto_700_24 and font_roboto_700_20 should match the filter in your Home Assistant YAML!
   - file:
       type: gfonts
       family: Roboto
       weight: 700
-    id: font_today_list
+    id: font_roboto_700_24
     size: 24
     glyphs: |-
       ! "#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz°
@@ -372,7 +372,7 @@ font:
       type: gfonts
       family: Roboto
       weight: 500
-    id: font_upcoming_date
+    id: font_roboto_500_20
     size: 20
     glyphs: |-
       ! "#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz°
@@ -380,7 +380,7 @@ font:
       type: gfonts
       family: Roboto
       weight: 700
-    id: font_upcoming_item
+    id: font_roboto_700_20
     size: 20
     glyphs: |-
       ! "#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz°
@@ -388,7 +388,7 @@ font:
       type: gfonts
       family: Roboto
       weight: 500
-    id: font_time
+    id: font_roboto_500_18_numeric
     size: 18
     glyphs: |-
       0123456789:
@@ -400,7 +400,7 @@ font:
   - file:
       type: gfonts
       family: 'Material+Symbols+Outlined'
-    id: font_battery_glyphs
+    id: font_mdi_22
     size: 22
     glyphs: &mdi-battery-glyphs
       - "\U0000E19C" # mdi-battery-warning
@@ -650,7 +650,9 @@ display:
       // it.rectangle(60, 60, 360, 680);
       // it.rectangle(70, 70, 340, 660);
       // it.rectangle(80, 80, 320, 640);
-    
+      
+      int padding = 10;
+      
       int col = 15;
       int row = 0;
       // make the spacing the font size + a bit more
@@ -671,13 +673,13 @@ display:
 
       // Refresh Timestamp with time and day
       // from https://community.home-assistant.io/t/esphome-show-time/348903
-      it.printf(10, 2, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000e5d5");
-      it.strftime(35, 4, id(font_refresh_stamp), COLOR_OFF, TextAlign::TOP_LEFT, "%H:%M %a", time);
+      it.printf(10, 2, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000e5d5");
+      it.strftime(35, 4, id(font_roboto_400_20), COLOR_OFF, TextAlign::TOP_LEFT, "%H:%M %a", time);
 
       //But also the current date.
-      int current_date_width = get_text_dimension(&it, id(font_refresh_stamp), "%b %d %Y", time, true);
-      it.printf(center-(current_date_width/2)-25, 2, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000ebcc");
-      it.strftime(center-(current_date_width/2), 4, id(font_refresh_stamp), COLOR_OFF, TextAlign::TOP_LEFT, "%b %d %Y", time);
+      int current_date_width = get_text_dimension(&it, id(font_roboto_400_20), "%b %d %Y", time, true);
+      it.printf(center-(current_date_width/2)-25, 2, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_LEFT, "%s", "\U0000ebcc");
+      it.strftime(center-(current_date_width/2), 4, id(font_roboto_400_20), COLOR_OFF, TextAlign::TOP_LEFT, "%b %d %Y", time);
 
       //Battery icon
       std::map<std::string, std::string> battery_icon_map
@@ -690,10 +692,10 @@ display:
       int batt_x = width-20; 
       int batt_y = 2;
       float batt_v = float(id(battery_adc).state);
-      if (0 <= batt_v && batt_v < 3.4) { it.printf(batt_x, batt_y, id(font_battery_glyphs), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterywarn"].c_str()); }
-      if (3.4 <= batt_v && batt_v < 3.6) { it.printf(batt_x, batt_y, id(font_battery_glyphs), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterylow"].c_str()); }
-      if (3.6 <= batt_v && batt_v < 3.8) { it.printf(batt_x, batt_y, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterymed"].c_str()); }
-      if (3.8 <= batt_v && batt_v < 4.3) { it.printf(batt_x, batt_y, id(font_battery_glyphs), COLOR_OFF, TextAlign::TOP_CENTER, "%s", battery_icon_map["batteryhigh"].c_str()); }
+      if (0 <= batt_v && batt_v < 3.4) { it.printf(batt_x, batt_y, id(font_mdi_22), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterywarn"].c_str()); }
+      if (3.4 <= batt_v && batt_v < 3.6) { it.printf(batt_x, batt_y, id(font_mdi_22), color_red, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterylow"].c_str()); }
+      if (3.6 <= batt_v && batt_v < 3.8) { it.printf(batt_x, batt_y, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_CENTER, "%s", battery_icon_map["batterymed"].c_str()); }
+      if (3.8 <= batt_v && batt_v < 4.3) { it.printf(batt_x, batt_y, id(font_mdi_22), COLOR_OFF, TextAlign::TOP_CENTER, "%s", battery_icon_map["batteryhigh"].c_str()); }
       // battery icon not displayed if voltage is above 4.3V (but ADC must still be connected to 5V pin)
 
       row = row + headerHeight;
@@ -718,13 +720,13 @@ display:
           std::string full_text = std::string(id(today)[i].c_str()); // Get the full string
           std::string category = full_text.substr(0, 2); // Extract the first two characters
           std::string event = full_text.substr(3); // Get the rest of the string
-          it.printf(col, row+2, id(font_battery_glyphs), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
-          it.printf(col+25, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
-          it.printf(center-10, row, id(font_time), color_red, TextAlign::TOP_RIGHT, "%s", id(today_times)[i].c_str()); 
+          it.printf(col, row+2, id(font_mdi_22), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
+          it.printf(col+25, row, id(font_roboto_700_24), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
+          it.printf(center-10, row, id(font_roboto_500_18_numeric), color_red, TextAlign::TOP_RIGHT, "%s", id(today_times)[i].c_str()); 
           row = row + spacing_today;
         }
       }else{
-        it.printf(col, row, id(font_today_list), color_blk, TextAlign::TOP_LEFT, "%s", "Nothing today!");
+        it.printf(col, row, id(font_roboto_700_24), color_blk, TextAlign::TOP_LEFT, "%s", "Nothing today!");
         row = row + spacing_today;
       }
       
@@ -747,16 +749,16 @@ display:
       for(size_t i = 0; i< id(upcoming).size();i++){
         if ((row <= lastrow) && (! (id(upcoming)[i].isEmpty()))) {
           if (i == 0 || id(upcoming_dates)[i].compareTo(id(upcoming_dates)[i-1]) != 0) {
-            it.printf(col, row, id(font_upcoming_date), color_red, TextAlign::TOP_LEFT, "%s", (id(upcoming_dates)[i] + ":").c_str());
+            it.printf(col, row, id(font_roboto_500_20), color_red, TextAlign::TOP_LEFT, "%s", (id(upcoming_dates)[i] + ":").c_str());
             row = row + spacing_upcoming_date;
           }
           std::string full_text = std::string(id(upcoming)[i].c_str()); // Get the full string
           std::string category = full_text.substr(0, 2); // Extract the first two characters
           std::string event = full_text.substr(3); // Get the rest of the string
           
-          it.printf(col+5, row, id(font_battery_glyphs), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
-          it.printf(col+30, row, id(font_upcoming_item), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
-          it.printf(width-10, row, id(font_time), color_red, TextAlign::TOP_RIGHT, "%s", id(upcoming_times)[i].c_str());
+          it.printf(col+5, row, id(font_mdi_22), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
+          it.printf(col+30, row, id(font_roboto_700_20), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
+          it.printf(width-10, row, id(font_roboto_500_18_numeric), color_red, TextAlign::TOP_RIGHT, "%s", id(upcoming_times)[i].c_str());
           row = row + spacing_upcoming_item;
         }
       }
@@ -790,11 +792,11 @@ display:
   
           if (i == 0) {
             // Header (day names)
-            it.printf(x_pos, y_pos, id(font_upcoming_date), color_red, TextAlign::CENTER, "%s", cal[i][j]);
+            it.printf(x_pos, y_pos, id(font_roboto_500_20), color_red, TextAlign::CENTER, "%s", cal[i][j]);
             if (j == 0) {
-              days_line_left_position = x_pos - (get_text_width( & it, id(font_upcoming_item), "%s", cal[i][j]) / 2);
+              days_line_left_position = x_pos - (get_text_width( & it, id(font_roboto_700_20), "%s", cal[i][j]) / 2);
             } else if (j == 6) {
-              days_line_right_position = x_pos + (get_text_width( & it, id(font_upcoming_item), "%s", cal[i][j]) / 2);
+              days_line_right_position = x_pos + (get_text_width( & it, id(font_roboto_700_20), "%s", cal[i][j]) / 2);
             }
           } else {
             // Day numbers
@@ -802,12 +804,12 @@ display:
             if (atoi(cal[i][j]) == time.day_of_month) {
               // Highlight current day
               it.filled_circle(x_pos, y_pos - 1, circle_size, color_blk);
-              it.printf(x_pos, y_pos, id(font_upcoming_item), COLOR_OFF, TextAlign::CENTER, "%s", cal[i][j]);
+              it.printf(x_pos, y_pos, id(font_roboto_700_20), COLOR_OFF, TextAlign::CENTER, "%s", cal[i][j]);
             } else {
               if(j > 6){
-                it.printf(x_pos, y_pos, id(font_upcoming_item), color_red, TextAlign::CENTER, "%s", cal[i][j]);
+                it.printf(x_pos, y_pos, id(font_roboto_700_20), color_red, TextAlign::CENTER, "%s", cal[i][j]);
               } else {
-                it.printf(x_pos, y_pos, id(font_upcoming_item), color_blk, TextAlign::CENTER, "%s", cal[i][j]);
+                it.printf(x_pos, y_pos, id(font_roboto_700_20), color_blk, TextAlign::CENTER, "%s", cal[i][j]);
               }
               
             }
@@ -872,14 +874,14 @@ display:
       
       // TEMPERATURE
       auto color_temp = (id(weather_now_min_temperature).state >= 25) ? color_red : color_blk;
-      it.printf(weather_x_pos + 10, weather_y_pos+20 + weather_icon_height, id(font_battery_glyphs), color_temp, TextAlign::TOP_LEFT, "\U0000f37a");
-      it.printf(weather_x_pos + 10 + 22, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_temp, TextAlign::TOP_LEFT, "%2.0f°", id(weather_now_min_temperature).state);
+      it.printf(weather_x_pos + 10, weather_y_pos+20 + weather_icon_height, id(font_mdi_22), color_temp, TextAlign::TOP_LEFT, "\U0000f37a");
+      it.printf(weather_x_pos + 10 + 22, weather_y_pos+20 + weather_icon_height, id(font_roboto_700_20), color_temp, TextAlign::TOP_LEFT, "%2.0f°", id(weather_now_min_temperature).state);
       
       color_temp = (id(weather_now_temperature).state >= 25) ? color_red : color_blk;
-      it.printf(middle_of_box_x, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_temp, TextAlign::TOP_CENTER, "%2.0f°", id(weather_now_temperature).state);
+      it.printf(middle_of_box_x, weather_y_pos+20 + weather_icon_height, id(font_roboto_700_20), color_temp, TextAlign::TOP_CENTER, "%2.0f°", id(weather_now_temperature).state);
       
       color_temp = (id(weather_now_max_temperature).state >= 25) ? color_red : color_blk;
-      it.printf(center - 10, weather_y_pos+20 + weather_icon_height, id(font_battery_glyphs), color_temp, TextAlign::TOP_RIGHT, "\U0000f379");
-      it.printf(center - 10 - 22, weather_y_pos+20 + weather_icon_height, id(font_upcoming_item), color_temp, TextAlign::TOP_RIGHT, "%2.0f°", id(weather_now_max_temperature).state);
+      it.printf(center - 10, weather_y_pos+20 + weather_icon_height, id(font_mdi_22), color_temp, TextAlign::TOP_RIGHT, "\U0000f379");
+      it.printf(center - 10 - 22, weather_y_pos+20 + weather_icon_height, id(font_roboto_700_20), color_temp, TextAlign::TOP_RIGHT, "%2.0f°", id(weather_now_max_temperature).state);
 
 
