@@ -803,7 +803,7 @@ display:
               it.filled_circle(x_pos, y_pos - 1, circle_size, color_blk);
               it.printf(x_pos, y_pos, id(font_roboto_700_20), COLOR_OFF, TextAlign::CENTER, "%s", cal[i][j]);
             } else {
-              if(j > 6){
+              if(j > 4){ // Weekend
                 it.printf(x_pos, y_pos, id(font_roboto_700_20), color_red, TextAlign::CENTER, "%s", cal[i][j]);
               } else {
                 it.printf(x_pos, y_pos, id(font_roboto_700_20), color_blk, TextAlign::CENTER, "%s", cal[i][j]);
