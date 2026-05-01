@@ -65,7 +65,10 @@ esp32:
   board: wemos_d1_mini32
   #board: esp32dev
   framework:
-    type: arduino
+    type: esp-idf
+    sdkconfig_options:
+      # Increase timeout to 30 seconds (Default is usually 5)
+      CONFIG_ESP_TASK_WDT_TIMEOUT_S: "30"
 
 preferences:
   flash_write_interval: 5s # default is 1min but seems sometimes id(recorded_display_refresh) doesn't get saved unless this is short
@@ -116,6 +119,11 @@ button:
     on_press:
       - lambda: 'id(data_updated) = true;'
       - script.execute: refresh_screen
+  - platform: template
+    name: "${friendly_name} Refresh Screen With update"
+    entity_category: config
+    on_press:
+      - script.execute: get_data_then_refresh_screen
 
 output:
   - platform: ledc
@@ -149,6 +157,7 @@ color:
 spi:
   clk_pin: ${clk_pin}
   mosi_pin: ${mosi_pin}
+  interface: hardware
 
 # Global variables for detecting if the display needs to be refreshed.
 globals:
@@ -165,22 +174,39 @@ globals:
     restore_value: yes
     initial_value: '0'
   - id: today
-    type: std::vector<String>  # Define a global variable as a vector of strings
-    initial_value: "std::vector<String>()"
+    type: std::vector<std::string>  # Define a global variable as a vector of std::strings
+    initial_value: "std::vector<std::string>()"
   - id: today_times
-    type: std::vector<String>  # Define a global variable as a vector of strings
-    initial_value: "std::vector<String>()"
+    type: std::vector<std::string>  # Define a global variable as a vector of std::strings
+    initial_value: "std::vector<std::string>()"
   - id: upcoming
-    type: std::vector<String>  # Define a global variable as a vector of strings
-    initial_value: "std::vector<String>()"
+    type: std::vector<std::string>  # Define a global variable as a vector of std::strings
+    initial_value: "std::vector<std::string>()"
   - id: upcoming_dates
-    type: std::vector<String>  # Define a global variable as a vector of strings
-    initial_value: "std::vector<String>()"
+    type: std::vector<std::string>  # Define a global variable as a vector of std::strings
+    initial_value: "std::vector<std::string>()"
   - id: upcoming_times
-    type: std::vector<String>  # Define a global variable as a vector of strings
-    initial_value: "std::vector<String>()"
+    type: std::vector<std::string>  # Define a global variable as a vector of std::strings
+    initial_value: "std::vector<std::string>()"
 
 script:
+  - id: get_temperature_data
+    mode: restart
+    then:
+      - homeassistant.action:
+          action: weather.get_forecasts
+          data:
+            type: daily
+            entity_id: '${ha_weather_entity}'
+          capture_response: true
+          on_success:
+            - lambda: |-
+                // Parse the JSON response and update the weather sensors
+                JsonObjectConst today = response["response"]["${ha_weather_entity}"]["forecast"][0];
+                ESP_LOGI("Weather", "Max temperature today: %.1f", today["temperature"].as<float>());
+                id(weather_now_max_temperature).publish_state(today["temperature"].as<float>());
+                ESP_LOGI("Weather", "Min temperature today: %.1f", today["templow"].as<float>());
+                id(weather_now_min_temperature).publish_state(today["templow"].as<float>());
   - id: get_data_then_refresh_screen
     mode: restart
     then:
@@ -214,20 +240,6 @@ script:
           condition:
             binary_sensor.is_off: disable_update
           then:
-            - homeassistant.action:
-                action: weather.get_forecasts
-                data:
-                  type: daily
-                  entity_id: '${ha_weather_entity}'
-                capture_response: true
-                on_success:
-                  - lambda: |-
-                      // Parse the JSON response and update the weather sensors
-                      JsonObjectConst today = response["response"]["${ha_weather_entity}"]["forecast"][0];
-                      ESP_LOGI("Weather", "Max temperature today: %.1f", today["temperature"].as<float>());
-                      id(weather_now_max_temperature).publish_state(today["temperature"].as<float>());
-                      ESP_LOGI("Weather", "Min temperature today: %.1f", today["templow"].as<float>());
-                      id(weather_now_min_temperature).publish_state(today["templow"].as<float>());
             - lambda: 'id(recorded_display_refresh) += 1;'
             - lambda: 'id(display_last_update).publish_state(id(homeassistant_time).now().timestamp);'
             - logger.log: "Refreshing display..."
@@ -340,7 +352,7 @@ font:
   # Get the Bold version here: https://fontsgeek.com/fonts/Gotham-Rounded-Bold
   # Get the Medium version here: https://fontsgeek.com/fonts/Gotham-Rounded-Medium
   # The glyphs must be present or you'll see boxes/blank spaces (no problem unless you edit the Display section below) - don't forget to include a space!
-  # How to get an easy glyphs list? Copy the code from here: https://www.geeksforgeeks.org/cpp-program-to-remove-duplicates-from-a-given-string/
+  # How to get an easy glyphs list? Copy the code from here: https://www.geeksforgeeks.org/cpp-program-to-remove-duplicates-from-a-given-std::string/
   # ...to here: https://www.onlinegdb.com/online_c++_compiler
   - file:
       type: gfonts
@@ -588,8 +600,8 @@ text_sensor:
             DynamicJsonDocument doc(2048);
             deserializeJson(doc, body);
             for(JsonVariant elem : doc.as<JsonArray>()){
-              id(today).push_back(String(elem["event"].as<String>().c_str()));
-              id(today_times).push_back(String(elem["start_time"].as<String>().c_str()));
+              id(today).push_back(std::string(elem["event"].as<std::string>().c_str()));
+              id(today_times).push_back(std::string(elem["start_time"].as<std::string>().c_str()));
             }
 
   - platform: homeassistant
@@ -608,9 +620,9 @@ text_sensor:
             DynamicJsonDocument doc(2048);
             deserializeJson(doc, body);
             for(JsonObject elem : doc.as<JsonArray>()){
-              id(upcoming).push_back(String(elem["event"].as<String>().c_str()));
-              id(upcoming_dates).push_back(String(elem["date"].as<String>().c_str()));
-              id(upcoming_times).push_back(String(elem["start_time"].as<String>().c_str()));
+              id(upcoming).push_back(std::string(elem["event"].as<std::string>().c_str()));
+              id(upcoming_dates).push_back(std::string(elem["date"].as<std::string>().c_str()));
+              id(upcoming_times).push_back(std::string(elem["start_time"].as<std::string>().c_str()));
             }
   
   # Weather sensors
@@ -715,9 +727,9 @@ display:
         };
       if(id(today).size() > 0){
         for(size_t i = 0; i < id(today).size();i++){
-          std::string full_text = std::string(id(today)[i].c_str()); // Get the full string
+          std::string full_text = std::string(id(today)[i].c_str()); // Get the full std::string
           std::string category = full_text.substr(0, 2); // Extract the first two characters
-          std::string event = full_text.substr(3); // Get the rest of the string
+          std::string event = full_text.substr(3); // Get the rest of the std::string
       
           it.printf(col, row+2, id(font_mdi_22), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
           it.printf(col+25, row, id(font_roboto_700_24), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
@@ -745,14 +757,14 @@ display:
       row = row + 3; // to account for the horizontal lines
 
       for(size_t i = 0; i< id(upcoming).size();i++){
-        if ((row <= lastrow) && (! (id(upcoming)[i].isEmpty()))) {
-          if (i == 0 || id(upcoming_dates)[i].compareTo(id(upcoming_dates)[i-1]) != 0) {
+        if ((row <= lastrow) && (! (id(upcoming)[i].empty()))) {
+          if (i == 0 || id(upcoming_dates)[i].compare(id(upcoming_dates)[i-1]) != 0) {
             it.printf(col, row, id(font_roboto_500_20), color_red, TextAlign::TOP_LEFT, "%s", (id(upcoming_dates)[i] + ":").c_str());
             row = row + spacing_upcoming_date;
           }
-          std::string full_text = std::string(id(upcoming)[i].c_str()); // Get the full string
+          std::string full_text = std::string(id(upcoming)[i].c_str()); // Get the full std::string
           std::string category = full_text.substr(0, 2); // Extract the first two characters
-          std::string event = full_text.substr(3); // Get the rest of the string
+          std::string event = full_text.substr(3); // Get the rest of the std::string
           
           it.printf(col+5, row-1, id(font_mdi_22), color_blk, TextAlign::TOP_LEFT, "%s", category_map[category].c_str());
           it.printf(col+30, row, id(font_roboto_700_20), color_blk, TextAlign::TOP_LEFT, "%s", event.c_str());
