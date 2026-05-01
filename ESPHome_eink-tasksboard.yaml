@@ -165,6 +165,10 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+  - id: temps_updated
+    type: bool
+    restore_value: no
+    initial_value: 'false'
   - id: wake_time_helper_updated
     type: bool
     restore_value: no
@@ -210,6 +214,11 @@ script:
   - id: get_data_then_refresh_screen
     mode: restart
     then:
+      - script.execute: get_temperature_data
+      - wait_until:
+          condition:
+            lambda: 'return id(temps_updated) == true;'
+          timeout: 10s
       - wait_until:
           condition:
             lambda: 'return id(data_updated) == true;'
@@ -225,7 +234,7 @@ script:
             - delay: !lambda 'return (((id(wake_time_helper).state - 30) < 0 ? 0 : (id(wake_time_helper).state - 30)) * 1000);'
       - if:
           condition:
-            lambda: 'return id(data_updated) == true;'
+            lambda: 'return id(data_updated) == true || id(temps_updated) == true;'
           then:
             - delay: 15s # Wait a bit longer so all the items are received. Might need to be more (5s not enough, 10s sometimes isn't enough)
             - logger.log: "Sensor data received."
@@ -555,14 +564,14 @@ sensor:
     update_interval: never
     on_value:
       then:
-         - lambda: 'id(data_updated) = true;'
+         - lambda: 'id(temps_updated) = true;'
   - platform: template
     id: weather_now_min_temperature
     device_class: "temperature"
     update_interval: never
     on_value:
       then:
-        - lambda: 'id(data_updated) = true;'
+        - lambda: 'id(temps_updated) = true;'
 
 text_sensor:
   - platform: version
@@ -596,12 +605,11 @@ text_sensor:
             id(today).clear();
             id(today_times).clear();
             std::string body = id(temp_today).state;
-
-            DynamicJsonDocument doc(2048);
-            deserializeJson(doc, body);
+             JsonDocument doc = json::parse_json(body);
+             
             for(JsonVariant elem : doc.as<JsonArray>()){
-              id(today).push_back(std::string(elem["event"].as<std::string>().c_str()));
-              id(today_times).push_back(std::string(elem["start_time"].as<std::string>().c_str()));
+              id(today).push_back(elem["event"].as<std::string>());
+              id(today_times).push_back(elem["start_time"].as<std::string>());
             }
 
   - platform: homeassistant
@@ -616,13 +624,12 @@ text_sensor:
             id(upcoming_dates).clear();
             id(upcoming_times).clear();
             std::string body = id(temp_upcoming).state;
-
-            DynamicJsonDocument doc(2048);
-            deserializeJson(doc, body);
-            for(JsonObject elem : doc.as<JsonArray>()){
-              id(upcoming).push_back(std::string(elem["event"].as<std::string>().c_str()));
-              id(upcoming_dates).push_back(std::string(elem["date"].as<std::string>().c_str()));
-              id(upcoming_times).push_back(std::string(elem["start_time"].as<std::string>().c_str()));
+            
+            JsonDocument doc = json::parse_json(body);
+            for(JsonVariant elem : doc.as<JsonArray>()){
+              id(upcoming).push_back(elem["event"].as<std::string>());
+              id(upcoming_dates).push_back(elem["date"].as<std::string>());
+              id(upcoming_times).push_back(elem["start_time"].as<std::string>());
             }
   
   # Weather sensors
