@@ -516,10 +516,7 @@ sensor:
     unit_of_measurement: "V"
     internal: true
     filters:
-      # this multiply number may need to be manually adjusted
-      # I used a 3.7V LiPo battery: 5V -> 100K resistor -> ADC -> 100K resistor -> GND
-      #                                                    ADC -> 100nF capacitor -> GND
-      - multiply: 2
+      - multiply:  0.06671114076
   - platform: template
     # This gets 5 readings (quickly) and calculates a median
     name: "${friendly_name} Battery"
@@ -818,8 +815,12 @@ display:
             // Day numbers
             y_pos += days_padding_bottom;
             if (atoi(cal[i][j]) == time.day_of_month) {
-              // Highlight current day
-              it.filled_circle(x_pos, y_pos - 1, circle_size, color_blk);
+                // Highlight current day
+                if(j > 4){ // Weekend
+                  it.filled_circle(x_pos, y_pos - 1, circle_size, color_red);
+                } else {
+                  it.filled_circle(x_pos, y_pos - 1, circle_size, color_blk);
+                }
               it.printf(x_pos, y_pos, id(font_roboto_700_20), COLOR_OFF, TextAlign::CENTER, "%s", cal[i][j]);
             } else {
               if(j > 4){ // Weekend
