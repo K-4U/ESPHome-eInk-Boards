@@ -6,7 +6,7 @@ substitutions:
   comment: "eInk-TasksBoard from K-4U"
   project_version: "2026.04.29"
   time_zone: "Europe/Amsterdam" # Check https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-  adc_pin: GPIO34
+  adc_pin: GPIO36
   sleep_time: 600min # this is the default but is overridden
 
 # Home Assistant entitites:
@@ -516,7 +516,7 @@ sensor:
     unit_of_measurement: "V"
     internal: true
     filters:
-      - multiply:  0.06671114076
+      - multiply:  1.25984251969
   - platform: template
     # This gets 5 readings (quickly) and calculates a median
     name: "${friendly_name} Battery"
