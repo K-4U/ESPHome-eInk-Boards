@@ -516,7 +516,7 @@ sensor:
     unit_of_measurement: "V"
     internal: true
     filters:
-      - multiply:  1.25984251969
+      - multiply: 2.08
   - platform: template
     # This gets 5 readings (quickly) and calculates a median
     name: "${friendly_name} Battery"
