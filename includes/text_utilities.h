@@ -1,9 +1,13 @@
 
+#ifndef TEXT_UTILITIES_H
+#define TEXT_UTILITIES_H
+#include "esphome/components/display/display.h"
+
 // Code based on https://community.home-assistant.io/t/centering-text-when-using-multiple-printf/491205/14
 
-std::array<int, 2> get_text_bounds(esphome::display::Display* display, esphome::font::Font* font, const char* text) {
+inline std::array<int, 2> get_text_bounds(esphome::display::Display* display, esphome::font::Font* font, const char* text) {
     int x1 = 0, y1 = 0, width = 0, height = 0;
-    display->get_text_bounds(0, 0, text, font, TextAlign::BOTTOM_CENTER, &x1, &y1, &width, &height);
+    display->get_text_bounds(0, 0, text, font, esphome::display::TextAlign::BOTTOM_CENTER, &x1, &y1, &width, &height);
     return {width, height};
 }
 
@@ -17,7 +21,7 @@ int get_text_dimension(esphome::display::Display* display, esphome::font::Font* 
 }
 
 // Specialization for esphome::ESPTime
-int get_text_dimension(esphome::display::Display* display, esphome::font::Font* font, const char* formatting, esphome::ESPTime& time, bool getWidth) {
+inline int get_text_dimension(esphome::display::Display* display, esphome::font::Font* font, const char* formatting, esphome::ESPTime& time, bool getWidth) {
     std::tm c_tm = time.to_c_tm();
     char buffer[80];
     std::strftime(buffer, sizeof(buffer), formatting, &c_tm);
@@ -36,4 +40,4 @@ int get_text_height(esphome::display::Display* display, esphome::font::Font* fon
     return get_text_dimension(display, font, formatting, value, false);
 }
 
-// End code based on https://community.home-assistant.io/t/centering-text-when-using-multiple-printf/491205/14
+#endif // TEXT_UTILITIES_H

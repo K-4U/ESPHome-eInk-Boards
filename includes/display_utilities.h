@@ -1,18 +1,8 @@
+#ifndef DISPLAY_UTILITIES_H
+#define DISPLAY_UTILITIES_H
+
 #include <string>
 #include <map>
-
-inline const char* get_category_icon(const std::string& category) {
-    static const std::map<std::string, const char*> category_map = {
-        {"F:", "\U0000E87D"},
-        {"W:", "\U0000E8F9"},
-        {"P:", "\U0000E7FD"},
-        {"J:", "\U0000E531"},
-        {"M:", "\U0000f036"},
-        {"B:", "\U0000e7e9"}
-    };
-    auto it = category_map.find(category);
-    return (it != category_map.end()) ? it->second : "";
-}
 
 inline const char* get_battery_icon(float voltage) {
     if (voltage < 3.4) return "\U0000E19C"; 
@@ -64,3 +54,5 @@ template<typename T>
 T get_temp_color(float temp, T hot_color, T normal_color) {
     return (temp >= 25.0f) ? hot_color : normal_color;
 }
+
+#endif // DISPLAY_UTILITIES_H

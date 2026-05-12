@@ -13,7 +13,7 @@ substitutions:
   ha_disable_update: input_boolean.eink_tasksboard_disable_update
   ha_disable_deep_sleep: input_boolean.eink_tasksboard_disable_deep_sleep
   ha_tasks_data: sensor.eink_tasksboard_data
-  ha_weather_entity: weather.openweathermap
+  ha_weather_entity: sensor.eink_tasksboard_weather_today
   ha_wake_times: sensor.eink_tasksboard_wake_times
 
 # A physical switch to disable deep sleep (optional, if no physical switch is attached then no problem)
@@ -41,7 +41,6 @@ esphome:
     name: "${project_name}"
     version: "${project_version}"
   includes:
-    - includes/calendar_utilities.h
     - includes/text_utilities.h
     - includes/display_utilities.h
   on_boot:
@@ -165,6 +164,33 @@ spi:
 
 task_manager:
   id: task_mgr
+  font_title: font_title
+  font_mdi_22: font_mdi_22
+  font_today_task: font_roboto_700_24
+  font_today_time: font_roboto_500_18_numeric
+  font_upcoming_date: font_roboto_500_20
+  font_upcoming_task: font_roboto_700_20
+  color_blk: color_blk
+  color_red: color_red
+
+calendar:
+  id: calendar_mgr
+  font_header: font_roboto_500_20
+  font_numbers: font_roboto_700_20
+  color_blk: color_blk
+  color_red: color_red
+
+weather:
+  id: weather_mgr
+  font_icon: font_mdi_large
+  font_temp: font_roboto_700_20
+  font_mdi_small: font_mdi_22
+  color_blk: color_blk
+  color_red: color_red
+  temperature_sensor: weather_now_temperature
+  temperature_min_sensor: weather_now_min_temperature
+  temperature_max_sensor: weather_now_max_temperature
+  condition_sensor: weather_now_condition
 
 # Global variables for detecting if the display needs to be refreshed.
 globals:
@@ -186,27 +212,9 @@ globals:
     initial_value: '0'
 
 script:
-  - id: get_temperature_data
-    mode: restart
-    then:
-      - homeassistant.action:
-          action: weather.get_forecasts
-          data:
-            type: daily
-            entity_id: '${ha_weather_entity}'
-          capture_response: true
-          on_success:
-            - lambda: |-
-                // Parse the JSON response and update the weather sensors
-                JsonObjectConst today = response["response"]["${ha_weather_entity}"]["forecast"][0];
-                ESP_LOGI("Weather", "Max temperature today: %.1f", today["temperature"].as<float>());
-                id(weather_now_max_temperature).publish_state(today["temperature"].as<float>());
-                ESP_LOGI("Weather", "Min temperature today: %.1f", today["templow"].as<float>());
-                id(weather_now_min_temperature).publish_state(today["templow"].as<float>());
   - id: get_data_then_refresh_screen
     mode: restart
     then:
-      - script.execute: get_temperature_data
       - wait_until:
           condition:
             lambda: 'return id(temps_updated) == true;'
@@ -541,23 +549,25 @@ sensor:
   # Weather sensor
   - platform: homeassistant
     entity_id: '${ha_weather_entity}'
-    attribute: temperature
+    attribute: current_temp
     id: weather_now_temperature
     device_class: "temperature"
     on_value:
       then:
          - lambda: 'id(data_updated) = true;'
-  - platform: template
+  - platform: homeassistant
+    entity_id: '${ha_weather_entity}'
+    attribute: max_temp
     id: weather_now_max_temperature
     device_class: "temperature"
-    update_interval: never
     on_value:
       then:
          - lambda: 'id(temps_updated) = true;'
-  - platform: template
+  - platform: homeassistant
+    entity_id: '${ha_weather_entity}'
+    attribute: min_temp
     id: weather_now_min_temperature
     device_class: "temperature"
-    update_interval: never
     on_value:
       then:
         - lambda: 'id(temps_updated) = true;'
@@ -607,6 +617,7 @@ text_sensor:
   - platform: homeassistant
     entity_id: '${ha_weather_entity}'
     id: weather_now_condition
+    attribute: current_condition
     on_value:
       then:
          - lambda: 'id(data_updated) = true;'
@@ -630,6 +641,8 @@ display:
       // Left from Madelena's code... perhaps if you want a black or colored background first (useful for fast-refresh screens?) to fill the background.
       // it.fill(color_bg);
 
+      id(task_mgr)->setup_layout(it);
+
       // Alignment rectangles! (uncomment to use - useful when first mounting the eInk screen)
       // it.rectangle(0, 0, 480, 800);
       // it.rectangle(10, 10, 460, 780);
@@ -642,18 +655,14 @@ display:
       // it.rectangle(80, 80, 320, 640);
       
       int padding = 10;
-      
-      int col = padding;
-      int row = 0;
-      int spacing_title = get_text_dimension(&it, id(font_title), "%s", "TODAY", false);
-      int spacing_today = get_text_dimension(&it, id(font_roboto_700_24), "%s", "Sample Task Text", false) + 2;
-      int spacing_upcoming_date = get_text_dimension(&it, id(font_roboto_500_20), "%s", "Sunday August 25:", false) + 2;
-      int spacing_upcoming_item = get_text_dimension(&it, id(font_roboto_700_20), "%s", "Sample Upcoming Task", false) + 2;
-      int lastrow = it.get_height() - spacing_upcoming_item - spacing_upcoming_date;
       int header_height = 28;
       
       int width = it.get_width();
       int center = it.get_width() / 2;
+
+      // Header-only spacing calculation for separator lines
+      int spacing_title = id(task_mgr)->get_spacing_title();
+
       auto time = id(homeassistant_time).now();
 
       //Header
@@ -680,137 +689,28 @@ display:
       // battery icon not displayed if voltage is above 4.3V (but ADC must still be connected to 5V pin)
 
       //HEADER DONE
+
+      // SEPARATOR LINES
+      int separator_y = header_height + spacing_title;
+      it.vertical_line(center, separator_y, it.get_height(), color_red);
+      it.horizontal_line(0, separator_y, width, color_red);
+      it.horizontal_line(0, separator_y + 1, width, color_red);
+      it.horizontal_line(0, separator_y + 2, width, color_red);
+
+      // TASKS RENDERING
+      // Today maxY: leave room for calendar
+      id(task_mgr)->render_today(it, padding, header_height, center - 10, it.get_height() - id(calendar_mgr)->get_height());
       
-      //TITLES:
-      it.printf(center/2, header_height, id(font_title), color_red, TextAlign::TOP_CENTER, "TODAY");
+      //Render upcoming
+      id(task_mgr)->render_upcoming(it, center + padding, header_height, width - 10, it.get_height());
+
+      // Calendar and Weather
+      int calendar_y_pos = it.get_height() - id(calendar_mgr)->get_height();
+      it.horizontal_line(0, calendar_y_pos, center, color_red);
       
-      // TODAY'S TASKS
-      row = header_height + spacing_title + 3; // to account for the horizontal line
-
-      if(id(task_mgr)->today.size() > 0){
-        for(const auto& task : id(task_mgr)->today){
-          it.printf(col, row+2, id(font_mdi_22), color_blk, TextAlign::TOP_LEFT, "%s", get_category_icon(task.category));
-          it.printf(col+25, row, id(font_roboto_700_24), color_blk, TextAlign::TOP_LEFT, "%s", task.event.c_str());
-          it.printf(center-10, row+4, id(font_roboto_500_18_numeric), color_red, TextAlign::TOP_RIGHT, "%s", task.time.c_str()); 
-          row = row + spacing_today;
-        }
-      } else {
-        it.printf(col, row, id(font_roboto_700_24), color_blk, TextAlign::TOP_LEFT, "%s", "Nothing today!");
-        row = row + spacing_today;
-      }
-
+      id(calendar_mgr)->render(it, time, 15, calendar_y_pos);
       
-      // UPCOMING TASKS
-      col = center + padding;
-
-      it.printf(center + (center/2), header_height, id(font_title), color_red, TextAlign::TOP_CENTER, "UPCOMING");
-      row = header_height + spacing_title;
-
-      it.vertical_line(center, header_height+spacing_title, it.get_height(), color_red);
-      it.horizontal_line(0, row, width, color_red);
-      it.horizontal_line(0, row+1, width, color_red);
-      it.horizontal_line(0, row+2, width, color_red);
-      
-      row = row + 3; // to account for the horizontal lines
-
-      for(size_t i = 0; i < id(task_mgr)->upcoming.size(); i++){
-        const auto& task = id(task_mgr)->upcoming[i];
-        if (row <= lastrow) {
-          if (i == 0 || task.date != id(task_mgr)->upcoming[i-1].date) {
-            it.printf(col, row, id(font_roboto_500_20), color_red, TextAlign::TOP_LEFT, "%s", (task.date + ":").c_str());
-            row = row + spacing_upcoming_date;
-          }
-          
-          it.printf(col+5, row-1, id(font_mdi_22), color_blk, TextAlign::TOP_LEFT, "%s", get_category_icon(task.category));
-          it.printf(col+30, row, id(font_roboto_700_20), color_blk, TextAlign::TOP_LEFT, "%s", task.event.c_str());
-          it.printf(width-10, row, id(font_roboto_500_18_numeric), color_red, TextAlign::TOP_RIGHT, "%s", task.time.c_str());
-          row = row + spacing_upcoming_item;
-        }
-      }
-
-      // Draw Calendar
-      int days_padding_bottom = 10;
-  
-      int circle_size = 17;
-  
-      int cell_size_width = 30;
-      int cell_size_height = 30;
-
-      int calendar_height = (6 * cell_size_height) + days_padding_bottom;
-      int calendar_width = 7 * cell_size_width + 10;
-      int calendar_x_pos = 15;
-      int calendar_y_pos = it.get_height() - calendar_height;
-
-      it.horizontal_line(0, calendar_y_pos - 10, center, color_red); // line above calendar
-
-      char cal[7][7][3]; // Calendar matrix including weekdays
-      int days_line_left_position = 0;
-      int days_line_right_position = 0;
-  
-      get_calendar_matrix(time.year, time.month, cal);
-  
-      for (int i = 0; i < 7; i++) {
-        for (int j = 0; j < 7; j++) {
-          int x_pos = calendar_x_pos + cell_size_width * j;
-          int y_pos = calendar_y_pos + cell_size_height * i;
-  
-          if (i == 0) {
-            // Header (day names)
-            it.printf(x_pos, y_pos, id(font_roboto_500_20), color_red, TextAlign::CENTER, "%s", cal[i][j]);
-            if (j == 0) {
-              days_line_left_position = x_pos - (get_text_width( & it, id(font_roboto_700_20), "%s", cal[i][j]) / 2);
-            } else if (j == 6) {
-              days_line_right_position = x_pos + (get_text_width( & it, id(font_roboto_700_20), "%s", cal[i][j]) / 2);
-            }
-          } else {
-            // Day numbers
-            y_pos += days_padding_bottom;
-            if (atoi(cal[i][j]) == time.day_of_month) {
-                // Highlight current day
-                if(j > 4){ // Weekend
-                  it.filled_circle(x_pos, y_pos - 1, circle_size, color_red);
-                } else {
-                  it.filled_circle(x_pos, y_pos - 1, circle_size, color_blk);
-                }
-              it.printf(x_pos, y_pos, id(font_roboto_700_20), COLOR_OFF, TextAlign::CENTER, "%s", cal[i][j]);
-            } else {
-              if(j > 4){ // Weekend
-                it.printf(x_pos, y_pos, id(font_roboto_700_20), color_red, TextAlign::CENTER, "%s", cal[i][j]);
-              } else {
-                it.printf(x_pos, y_pos, id(font_roboto_700_20), color_blk, TextAlign::CENTER, "%s", cal[i][j]);
-              }
-              
-            }
-          }
-        }
-        if (i == 1) {
-          it.line(days_line_left_position, calendar_y_pos + (cell_size_height / 2), days_line_right_position, calendar_y_pos + (cell_size_height / 2), color_blk);
-        }
-      }
-  
-      // End Draw Calendar
-
-      //Start draw weather:
-      int weather_x_pos = calendar_width;
-      int weather_y_pos = calendar_y_pos;
-
-      it.vertical_line(weather_x_pos, weather_y_pos - 10, calendar_height+20, color_red);
-      //If i wanna be awesome, i could center it in the box i have.
-      int middle_of_box_x = weather_x_pos + ((center - weather_x_pos) / 2);
-
-      int weather_icon_width = 130;
-      int weather_icon_height = 130;
-
-      // CURRENT WEATHER
-      it.printf(middle_of_box_x, weather_y_pos+20, id(font_mdi_large), color_blk, TextAlign::TOP_CENTER, "%s", get_weather_icon(id(weather_now_condition).state));
-      
-      // TEMPERATURE
-      it.printf(weather_x_pos + 10, weather_y_pos+20 + weather_icon_height, id(font_mdi_22), get_temp_color(id(weather_now_min_temperature).state, color_red, color_blk), TextAlign::TOP_LEFT, "\U0000f37a");
-      it.printf(weather_x_pos + 10 + 22, weather_y_pos+20 + weather_icon_height, id(font_roboto_700_20), get_temp_color(id(weather_now_min_temperature).state, color_red, color_blk), TextAlign::TOP_LEFT, "%2.0f°", id(weather_now_min_temperature).state);
-      
-      it.printf(middle_of_box_x, weather_y_pos+20 + weather_icon_height, id(font_roboto_700_20), get_temp_color(id(weather_now_temperature).state, color_red, color_blk), TextAlign::TOP_CENTER, "%2.0f°", id(weather_now_temperature).state);
-      
-      it.printf(center - 10, weather_y_pos+20 + weather_icon_height, id(font_mdi_22), get_temp_color(id(weather_now_max_temperature).state, color_red, color_blk), TextAlign::TOP_RIGHT, "\U0000f379");
-      it.printf(center - 10 - 22, weather_y_pos+20 + weather_icon_height, id(font_roboto_700_20), get_temp_color(id(weather_now_max_temperature).state, color_red, color_blk), TextAlign::TOP_RIGHT, "%2.0f°", id(weather_now_max_temperature).state);
+      int calendar_width = 7 * 30 + 10; 
+      id(weather_mgr)->render(it, calendar_width, calendar_y_pos, center - calendar_width, id(calendar_mgr)->get_height());
 
 
