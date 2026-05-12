@@ -701,16 +701,16 @@ display:
       // Today maxY: leave room for calendar
       id(task_mgr)->render_today(it, padding, header_height, center - 10, it.get_height() - id(calendar_mgr)->get_height());
       
-      //Render upcoming
+      // Upcoming maxY: leave room at the bottom
       id(task_mgr)->render_upcoming(it, center + padding, header_height, width - 10, it.get_height());
 
       // Calendar and Weather
-      int calendar_y_pos = it.get_height() - id(calendar_mgr)->get_height();
-      it.horizontal_line(0, calendar_y_pos, center, color_red);
+      int calendar_y_pos = it.get_height() - id(calendar_mgr)->get_height() + 10;
+      it.horizontal_line(0, calendar_y_pos - 10, center, color_red);
       
       id(calendar_mgr)->render(it, time, 15, calendar_y_pos);
       
       int calendar_width = 7 * 30 + 10; 
-      id(weather_mgr)->render(it, calendar_width, calendar_y_pos, center - calendar_width, id(calendar_mgr)->get_height());
+      id(weather_mgr)->render(it, calendar_width, calendar_y_pos, center - calendar_width, id(calendar_mgr)->get_height()-20);
 
 

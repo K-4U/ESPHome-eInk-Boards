@@ -58,7 +58,7 @@ class Weather : public Component {
 
     // CURRENT WEATHER ICON
     if (font_icon_) {
-      it.printf(middle_of_box_x, weather_y_pos + 20, font_icon_, color_blk_, display::TextAlign::TOP_CENTER, "%s", get_weather_icon_(condition));
+      it.printf(middle_of_box_x, weather_y_pos + 0, font_icon_, color_blk_, display::TextAlign::TOP_CENTER, "%s", get_weather_icon_(condition));
     }
     
     // TEMPERATURES
@@ -66,21 +66,21 @@ class Weather : public Component {
       // MIN TEMP
       if (!std::isnan(temp_min)) {
         Color min_color = get_temp_color_(temp_min);
-        it.printf(weather_x_pos + 10, weather_y_pos + 20 + weather_icon_height, font_mdi_small_, min_color, display::TextAlign::TOP_LEFT, "\U0000f37a");
-        it.printf(weather_x_pos + 10 + 22, weather_y_pos + 20 + weather_icon_height, font_temp_, min_color, display::TextAlign::TOP_LEFT, "%2.0f°", temp_min);
+        it.printf(weather_x_pos + 10, weather_y_pos + 0 + weather_icon_height, font_mdi_small_, min_color, display::TextAlign::TOP_LEFT, "\U0000f37a");
+        it.printf(weather_x_pos + 10 + 22, weather_y_pos + 0 + weather_icon_height, font_temp_, min_color, display::TextAlign::TOP_LEFT, "%2.0f°", temp_min);
       }
       
       // CURRENT TEMP
       if (!std::isnan(temp)) {
         Color curr_color = get_temp_color_(temp);
-        it.printf(middle_of_box_x, weather_y_pos + 20 + weather_icon_height, font_temp_, curr_color, display::TextAlign::TOP_CENTER, "%2.0f°", temp);
+        it.printf(middle_of_box_x, weather_y_pos + 0 + weather_icon_height, font_temp_, curr_color, display::TextAlign::TOP_CENTER, "%2.0f°", temp);
       }
       
       // MAX TEMP
       if (!std::isnan(temp_max)) {
         Color max_color = get_temp_color_(temp_max);
-        it.printf(weather_x_pos + width - 10, weather_y_pos + 20 + weather_icon_height, font_mdi_small_, max_color, display::TextAlign::TOP_RIGHT, "\U0000f379");
-        it.printf(weather_x_pos + width - 10 - 22, weather_y_pos + 20 + weather_icon_height, font_temp_, max_color, display::TextAlign::TOP_RIGHT, "%2.0f°", temp_max);
+        it.printf(weather_x_pos + width - 10, weather_y_pos + 0 + weather_icon_height, font_mdi_small_, max_color, display::TextAlign::TOP_RIGHT, "\U0000f379");
+        it.printf(weather_x_pos + width - 10 - 22, weather_y_pos + 0 + weather_icon_height, font_temp_, max_color, display::TextAlign::TOP_RIGHT, "%2.0f°", temp_max);
       }
     }
   }

@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <cctype>
 
 // We'll include text_utilities.h later in the YAML or here if possible.
 // To be safe, we'll assume it's available or we'll define what we need.
@@ -121,10 +122,16 @@ class TaskManager : public Component {
         } else {
             for (const auto& task : this->today) {
                 if (row + spacing_today_ > maxY) break;
+
+                int time_width = get_text_width(&it, font_today_time, "%s", task.time.c_str());
+                int avail_width_first = (maxX - (x + 25)) - time_width - 10;
+                int avail_width_others = (maxX - (x + 25)) - 10;
+
                 it.printf(x, row + 2, font_mdi_22, color_blk, display::TextAlign::TOP_LEFT, "%s", task.category_icon.c_str());
-                it.printf(x + 25, row, font_today_task, color_blk, display::TextAlign::TOP_LEFT, "%s", task.event.c_str());
                 it.printf(maxX, row + 4, font_today_time, color_red, display::TextAlign::TOP_RIGHT, "%s", task.time.c_str());
-                row += spacing_today_;
+                
+                int used_height = this->render_wrapped_text_(it, x + 25, row, avail_width_first, avail_width_others, maxY, font_today_task, color_blk, task.event, spacing_today_);
+                row += std::max(used_height, spacing_today_);
             }
         }
     }
@@ -141,24 +148,82 @@ class TaskManager : public Component {
             const auto& task = this->upcoming[i];
             
             bool is_new_date = (i == 0 || task.date != this->upcoming[i-1].date);
-            int needed_height = is_new_date ? (spacing_upcoming_date_ + spacing_upcoming_item_) : spacing_upcoming_item_;
-
-            if (row + needed_height > maxY) break;
+            
+            if (is_new_date && row + spacing_upcoming_date_ + spacing_upcoming_item_ > maxY) break;
 
             if (is_new_date) {
                 it.printf(x, row, font_upcoming_date, color_red, display::TextAlign::TOP_LEFT, "%s", (task.date + ":").c_str());
                 row += spacing_upcoming_date_;
             }
 
+            int time_width = get_text_width(&it, font_today_time, "%s", task.time.c_str());
+            int avail_width_first = (maxX - (x + 30)) - time_width - 10;
+            int avail_width_others = (maxX - (x + 30)) - 10;
+
             it.printf(x + 5, row - 1, font_mdi_22, color_blk, display::TextAlign::TOP_LEFT, "%s", task.category_icon.c_str());
-            it.printf(x + 30, row, font_upcoming_task, color_blk, display::TextAlign::TOP_LEFT, "%s", task.event.c_str());
             it.printf(maxX, row, font_today_time, color_red, display::TextAlign::TOP_RIGHT, "%s", task.time.c_str());
-            row += spacing_upcoming_item_;
+
+            int used_height = this->render_wrapped_text_(it, x + 30, row, avail_width_first, avail_width_others, maxY, font_upcoming_task, color_blk, task.event, spacing_upcoming_item_);
+            row += std::max(used_height, spacing_upcoming_item_);
         }
     }
 
 
  protected:
+    std::vector<std::string> split_words_(const std::string &text) {
+        std::vector<std::string> words;
+        std::string word;
+        for (char c : text) {
+            if (std::isspace(static_cast<unsigned char>(c))) {
+                if (!word.empty()) {
+                    words.push_back(word);
+                    word = "";
+                }
+            } else {
+                word += c;
+            }
+        }
+        if (!word.empty()) words.push_back(word);
+        return words;
+    }
+
+    int render_wrapped_text_(esphome::display::Display &it, int x, int y, int first_line_width, int subsequent_lines_width, int maxY, font::Font *font, Color color, const std::string &text, int line_height) {
+        std::vector<std::string> words = this->split_words_(text);
+        if (words.empty()) return 0;
+
+        std::string current_line;
+        int current_y = y;
+        bool first_line = true;
+
+        for (const auto& word : words) {
+            int current_width = first_line ? first_line_width : subsequent_lines_width;
+            std::string test_line = current_line.empty() ? word : current_line + " " + word;
+            
+            if (get_text_width(&it, font, "%s", test_line.c_str()) > current_width) {
+                if (!current_line.empty()) {
+                    if (current_y + line_height > maxY) return current_y - y;
+                    it.printf(x, current_y, font, color, display::TextAlign::TOP_LEFT, "%s", current_line.c_str());
+                    current_y += line_height;
+                    current_line = word;
+                    first_line = false;
+                } else {
+                    if (current_y + line_height > maxY) return current_y - y;
+                    it.printf(x, current_y, font, color, display::TextAlign::TOP_LEFT, "%s", word.c_str());
+                    current_y += line_height;
+                    current_line = "";
+                    first_line = false;
+                }
+            } else {
+                current_line = test_line;
+            }
+        }
+        if (!current_line.empty() && current_y + line_height <= maxY) {
+            it.printf(x, current_y, font, color, display::TextAlign::TOP_LEFT, "%s", current_line.c_str());
+            current_y += line_height;
+        }
+        return current_y - y;
+    }
+
     Task parse_task_(const std::string& full_text, const std::string& date, const std::string& time) {
         std::string category = "";
         std::string event = full_text;

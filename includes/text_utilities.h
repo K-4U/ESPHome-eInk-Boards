@@ -14,8 +14,8 @@ inline std::array<int, 2> get_text_bounds(esphome::display::Display* display, es
 // Function template for formatting text and getting its dimension
 template<typename T>
 int get_text_dimension(esphome::display::Display* display, esphome::font::Font* font, const char* formatting, const T& value, bool getWidth) {
-    char buffer[80];
-    std::sprintf(buffer, formatting, value);
+    char buffer[256];
+    std::snprintf(buffer, sizeof(buffer), formatting, value);
     auto bounds = get_text_bounds(display, font, buffer);
     return getWidth ? bounds[0] : bounds[1];
 }
